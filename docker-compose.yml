@@ -1,0 +1,15 @@
+services:
+  postgres:
+    image: postgres:16
+    container_name: kubesage-postgres
+    environment:
+      POSTGRES_USER: kubesage
+      POSTGRES_PASSWORD: kubesage2005
+      POSTGRES_DB: kubesage_db
+    ports:
+      - "5432:5432"
+    volumes:
+      - postgres_data:/var/lib/postgresql/data
+
+volumes:
+  postgres_data:
