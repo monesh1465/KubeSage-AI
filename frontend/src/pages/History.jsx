@@ -144,164 +144,187 @@ function HistoryContent({ clusterId, clusterName }) {
 
     return history.filter((item) => {
       const issues = parseIssues(item.issues);
-      const grouped = groupIssues(issues);
       const createdAt = new Date(item.created_at).getTime();
       const summaryText = `${item.summary} ${item.status} ${formatDateTime(item.created_at)} ${issues
         .map((issue) => `${issue.type} ${issue.namespace} ${issue.severity} ${normalizeResourceName(issue.resource)}`)
         .join(" ")}`.toLowerCase();
 
-      const matchesSearch =
-        !search.trim() || summaryText.includes(search.trim().toLowerCase());
+      // Search match
+      const matchesSearch = !search.trim() || summaryText.includes(search.toLowerCase());
 
-      const matchesTime =
-        !windowMs || (Number.isFinite(createdAt) && referenceTime - createdAt <= windowMs);
+      // Time range filter
+      const matchesTime = !windowMs || referenceTime - createdAt <= windowMs;
 
-      const issueCount = issues.length;
-      const derivedStatus =
-        item.status === "Healthy"
-          ? "Healthy"
-          : item.status === "Warning"
-            ? "Warning"
-            : issueCount >= 3
-              ? "Critical"
-              : issueCount > 0
-                ? "Warning"
-                : "Healthy";
+      // Status match
+      const itemStatus = normalizeStatus(getIssuePriority(issues));
+      const matchesStatus = statusFilter === "all" || itemStatus === normalizeStatus(statusFilter);
 
-      const matchesStatus =
-        statusFilter === "all" || normalizeStatus(derivedStatus) === normalizeStatus(statusFilter);
-
+      // Issue type match
       const matchesIssueType =
-        issueTypeFilter === "all" || grouped.some((issue) => issue.type === issueTypeFilter);
+        issueTypeFilter === "all" || issues.some((issue) => issue.type === issueTypeFilter);
 
       return matchesSearch && matchesTime && matchesStatus && matchesIssueType;
     });
-  }, [history, issueTypeFilter, referenceTime, search, statusFilter, timeWindow]);
-
-  const sortedHistory = useMemo(() => {
-    const items = [...filteredHistory];
-    items.sort((a, b) => {
-      const aTime = new Date(a.created_at).getTime();
-      const bTime = new Date(b.created_at).getTime();
-      const aIssues = parseIssues(a.issues).length;
-      const bIssues = parseIssues(b.issues).length;
-      const aCritical = parseIssues(a.issues).some((issue) => (issue.severity || "").toLowerCase() === "high");
-      const bCritical = parseIssues(b.issues).some((issue) => (issue.severity || "").toLowerCase() === "high");
-
-      if (sortBy === "oldest") return aTime - bTime;
-      if (sortBy === "issues") return bIssues - aIssues || bTime - aTime;
-      if (sortBy === "critical") return Number(bCritical) - Number(aCritical) || bTime - aTime;
-      return bTime - aTime;
-    });
-    return items;
-  }, [filteredHistory, sortBy]);
-
-  const paginatedHistory = useMemo(() => {
-    const start = (page - 1) * PAGE_SIZE;
-    return sortedHistory.slice(start, start + PAGE_SIZE);
-  }, [page, sortedHistory]);
-
-  const totalPages = Math.max(1, Math.ceil(sortedHistory.length / PAGE_SIZE));
-
-  const stats = useMemo(() => {
-    const items = filteredHistory;
-    const severity = items.flatMap((item) => parseIssues(item.issues));
-    const severityCounts = countIssuesBySeverity(severity);
-    const healthy = items.filter((item) => parseIssues(item.issues).length === 0).length;
-    const warning = items.filter((item) => {
-      const issues = parseIssues(item.issues);
-      return issues.length > 0 && issues.length < 3;
-    }).length;
-    const critical = items.filter((item) => parseIssues(item.issues).length >= 3).length;
-    const totalIssues = severity.length;
-
-    return { total: items.length, healthy, warning, critical, totalIssues, severityCounts };
-  }, [filteredHistory]);
+  }, [history, search, timeWindow, statusFilter, issueTypeFilter, referenceTime]);
 
   const uniqueIssueTypes = useMemo(() => {
     const types = new Set();
-    filteredHistory.forEach((item) => {
-      parseIssues(item.issues).forEach((issue) => types.add(issue.type));
+    history.forEach((item) => {
+      parseIssues(item.issues).forEach((issue) => {
+        if (issue.type) types.add(issue.type);
+      });
     });
     return Array.from(types).sort();
+  }, [history]);
+
+  const sortedHistory = useMemo(() => {
+    return [...filteredHistory].sort((a, b) => {
+      const issuesA = parseIssues(a.issues);
+      const issuesB = parseIssues(b.issues);
+
+      if (sortBy === "newest") {
+        return new Date(b.created_at) - new Date(a.created_at);
+      }
+      if (sortBy === "oldest") {
+        return new Date(a.created_at) - new Date(b.created_at);
+      }
+      if (sortBy === "issues") {
+        return issuesB.length - issuesA.length;
+      }
+      if (sortBy === "critical") {
+        const severityScore = (issues) =>
+          issues.reduce((acc, issue) => {
+            const sev = (issue.severity || "").toLowerCase();
+            if (sev === "critical" || sev === "high") return acc + 10;
+            if (sev === "medium") return acc + 3;
+            return acc + 1;
+          }, 0);
+        return severityScore(issuesB) - severityScore(issuesA);
+      }
+      return 0;
+    });
+  }, [filteredHistory, sortBy]);
+
+  const stats = useMemo(() => {
+    let healthy = 0;
+    let warning = 0;
+    let critical = 0;
+    let totalIssues = 0;
+
+    filteredHistory.forEach((item) => {
+      const issues = parseIssues(item.issues);
+      const label = getIssuePriority(issues);
+      totalIssues += issues.length;
+
+      if (label === "Healthy") healthy++;
+      else if (label === "Warning") warning++;
+      else if (label === "Critical") critical++;
+    });
+
+    return {
+      total: filteredHistory.length,
+      healthy,
+      warning,
+      critical,
+      totalIssues,
+    };
   }, [filteredHistory]);
 
-  const selectedClusterIssues = useMemo(
-    () => filteredHistory.flatMap((item) => parseIssues(item.issues)),
-    [filteredHistory]
-  );
+  const mostAffectedNamespace = useMemo(() => {
+    const namespaces = {};
+    filteredHistory.forEach((item) => {
+      parseIssues(item.issues).forEach((issue) => {
+        if (issue.namespace) {
+          namespaces[issue.namespace] = (namespaces[issue.namespace] || 0) + 1;
+        }
+      });
+    });
 
-  const mostCommonIssue = getMostCommonIssue(selectedClusterIssues);
-  const mostAffectedNamespace = getMostAffectedNamespace(selectedClusterIssues);
+    let topNamespace = "None";
+    let maxCount = 0;
+    Object.entries(namespaces).forEach(([ns, count]) => {
+      if (count > maxCount) {
+        maxCount = count;
+        topNamespace = ns;
+      }
+    });
+
+    return topNamespace;
+  }, [filteredHistory]);
+
+  const totalPages = Math.ceil(sortedHistory.length / PAGE_SIZE);
+  const paginatedHistory = useMemo(() => {
+    const start = (page - 1) * PAGE_SIZE;
+    return sortedHistory.slice(start, start + PAGE_SIZE);
+  }, [sortedHistory, page]);
 
   const handleExport = (format) => {
-    const exportRows = buildExportRows(sortedHistory, clusterName);
-    const fileBase = `${clusterName || "investigations"}-history`;
+    const rows = buildExportRows(sortedHistory, clusterName);
+    let blob;
 
     if (format === "json") {
-      const blob = new Blob([JSON.stringify(exportRows, null, 2)], { type: "application/json" });
-      const url = URL.createObjectURL(blob);
-      const anchor = document.createElement("a");
-      anchor.href = url;
-      anchor.download = `${fileBase}.json`;
-      anchor.click();
-      URL.revokeObjectURL(url);
-      return;
+      blob = new Blob([JSON.stringify(rows, null, 2)], { type: "application/json" });
+    } else {
+      const headers = ["Investigation ID", "Cluster", "Status", "Summary", "Issues Count", "Created At", "Duration"];
+      const csvContent = [
+        headers.join(","),
+        ...rows.map((row) =>
+          [
+            toCsvValue(row.investigation_id),
+            toCsvValue(row.cluster),
+            toCsvValue(row.status),
+            toCsvValue(row.summary),
+            row.issue_count,
+            toCsvValue(row.created_at),
+            toCsvValue(row.duration),
+          ].join(",")
+        ),
+      ].join("\n");
+      blob = new Blob([csvContent], { type: "text/csv" });
     }
 
-    const headers = [
-      "investigation_id",
-      "cluster",
-      "status",
-      "summary",
-      "issue_count",
-      "created_at",
-      "duration",
-    ];
-    const csv = [
-      headers.join(","),
-      ...exportRows.map((row) =>
-        headers.map((header) => toCsvValue(row[header])).join(",")
-      ),
-    ].join("\n");
-
-    const blob = new Blob([csv], { type: "text/csv" });
     const url = URL.createObjectURL(blob);
-    const anchor = document.createElement("a");
-    anchor.href = url;
-    anchor.download = `${fileBase}.csv`;
-    anchor.click();
-    URL.revokeObjectURL(url);
+    const link = document.createElement("a");
+    link.href = url;
+    link.download = `kubesage-history-${clusterName.toLowerCase()}-${Date.now()}.${format}`;
+    document.body.appendChild(link);
+    link.click();
+    document.body.removeChild(link);
   };
+
+  const handlePageChange = (newPage) => {
+    setPage(newPage);
+    setExpandedId(null);
+  };
+
+  const mostCommonIssue = getMostCommonIssue(
+    sortedHistory.flatMap((item) => parseIssues(item.issues))
+  );
 
   if (loading) {
     return (
-      <div className="flex h-32 items-center justify-center">
-        <LoadingSpinner />
+      <div className="flex h-48 items-center justify-center">
+        <LoadingSpinner size="md" />
       </div>
     );
   }
 
   if (error) {
-    return (
-      <div className="p-4">
-        <ErrorAlert message={error} onRetry={fetchHistory} />
-      </div>
-    );
+    return <ErrorAlert message={error} onRetry={fetchHistory} className="m-5" />;
   }
 
   if (history.length === 0) {
     return (
       <EmptyState
         icon={FiClock}
-        title="No investigation history"
-        description={`No investigations have been recorded for ${clusterName} yet.`}
+        title="No investigations found"
+        description="Run an investigation to start logging history for this cluster."
         action={
           <Link
             to={`/clusters/${clusterId}/investigate`}
-            className="inline-flex items-center gap-2 rounded-lg bg-[var(--color-primary)] px-4 py-2 text-sm font-medium text-white"
+            className="inline-flex items-center gap-1.5 rounded-lg bg-[var(--color-primary)] px-3 py-1.5 text-xs font-bold text-white hover:opacity-90"
           >
-            <FiSearch className="h-4 w-4" />
+            <FiSearch className="h-3.5 w-3.5" />
             Run Investigation
           </Link>
         }
@@ -311,36 +334,36 @@ function HistoryContent({ clusterId, clusterName }) {
 
   return (
     <div className="space-y-5 px-0 pb-2">
-      <div className="grid gap-4 md:grid-cols-2 xl:grid-cols-4">
+      <div className="grid gap-4 md:grid-cols-2 lg:grid-cols-4">
         <StatCard title="Total Investigations" value={stats.total} icon={FiClock} />
-        <StatCard title="Healthy" value={stats.healthy} icon={FiCheckCircle} variant="success" />
-        <StatCard title="Warning" value={stats.warning} icon={FiAlertTriangle} variant="warning" />
-        <StatCard title="Critical" value={stats.critical} icon={FiXCircle} variant="danger" />
+        <StatCard title="Healthy Reports" value={stats.healthy} icon={FiCheckCircle} variant="success" />
+        <StatCard title="Warning Reports" value={stats.warning} icon={FiAlertTriangle} variant="warning" />
+        <StatCard title="Critical Reports" value={stats.critical} icon={FiXCircle} variant="danger" />
       </div>
 
-      <div className="rounded-2xl border border-[var(--color-border)] bg-[var(--color-card)] p-4 shadow-[var(--shadow-card)] md:p-5">
+      <div className="rounded-xl border border-[var(--color-border)] bg-[var(--color-card)] p-4 shadow-sm md:p-5">
         <div className="flex flex-col gap-3 lg:flex-row lg:items-center lg:justify-between">
           <div>
-            <h3 className="text-sm font-semibold text-[var(--color-text)]">Search & Filters</h3>
-            <p className="text-sm text-[var(--color-secondary)]">
-              Filter by issue type, namespace, summary, or date.
+            <h3 className="text-xs font-bold text-[var(--color-text)]">Search & Filters</h3>
+            <p className="text-[10px] text-[var(--color-secondary)]">
+              Filter by issue type, namespace, summary, or date window.
             </p>
           </div>
           <div className="flex flex-wrap gap-2">
             <button
               type="button"
               onClick={() => handleExport("json")}
-              className="inline-flex items-center gap-2 rounded-lg border border-[var(--color-border)] px-3 py-2 text-sm text-[var(--color-text)] hover:bg-[var(--color-bg)]"
+              className="inline-flex items-center gap-1.5 rounded-lg border border-[var(--color-border)] px-2.5 py-1.5 text-xs font-semibold text-[var(--color-text)] hover:bg-[var(--color-bg)]"
             >
-              <FiDownload className="h-4 w-4" />
+              <FiDownload className="h-3.5 w-3.5" />
               Export JSON
             </button>
             <button
               type="button"
               onClick={() => handleExport("csv")}
-              className="inline-flex items-center gap-2 rounded-lg border border-[var(--color-border)] px-3 py-2 text-sm text-[var(--color-text)] hover:bg-[var(--color-bg)]"
+              className="inline-flex items-center gap-1.5 rounded-lg border border-[var(--color-border)] px-2.5 py-1.5 text-xs font-semibold text-[var(--color-text)] hover:bg-[var(--color-bg)]"
             >
-              <FiDownload className="h-4 w-4" />
+              <FiDownload className="h-3.5 w-3.5" />
               Export CSV
             </button>
           </div>
@@ -348,22 +371,22 @@ function HistoryContent({ clusterId, clusterName }) {
 
         <div className="mt-4 grid gap-3 lg:grid-cols-[1.5fr_0.7fr_0.7fr]">
           <div className="relative">
-            <FiSearch className="pointer-events-none absolute left-3 top-1/2 h-4 w-4 -translate-y-1/2 text-[var(--color-secondary)]" />
+            <FiSearch className="pointer-events-none absolute left-3 top-1/2 h-3.5 w-3.5 -translate-y-1/2 text-[var(--color-secondary)]" />
             <input
               type="text"
               value={search}
               onChange={(e) => setSearch(e.target.value)}
-              placeholder="Search investigations..."
-              className="w-full rounded-lg border border-[var(--color-border)] bg-[var(--color-bg)] py-2.5 pl-9 pr-3 text-sm text-[var(--color-text)] outline-none focus:border-[var(--color-primary)]"
+              placeholder="Search history..."
+              className="w-full rounded-lg border border-[var(--color-border)] bg-[var(--color-bg)] py-1.5 pl-8.5 pr-3 text-xs text-[var(--color-text)] outline-none focus:border-[var(--color-primary)]"
             />
           </div>
 
           <div className="relative">
-            <FiFilter className="pointer-events-none absolute left-3 top-1/2 h-4 w-4 -translate-y-1/2 text-[var(--color-secondary)]" />
+            <FiFilter className="pointer-events-none absolute left-3 top-1/2 h-3.5 w-3.5 -translate-y-1/2 text-[var(--color-secondary)]" />
             <select
               value={timeWindow}
               onChange={(e) => setTimeWindow(e.target.value)}
-              className="w-full appearance-none rounded-lg border border-[var(--color-border)] bg-[var(--color-bg)] py-2.5 pl-9 pr-3 text-sm text-[var(--color-text)] outline-none focus:border-[var(--color-primary)]"
+              className="w-full appearance-none rounded-lg border border-[var(--color-border)] bg-[var(--color-bg)] py-1.5 pl-8.5 pr-3 text-xs text-[var(--color-text)] outline-none focus:border-[var(--color-primary)]"
             >
               {TIME_WINDOWS.map((option) => (
                 <option key={option.value} value={option.value}>
@@ -374,11 +397,11 @@ function HistoryContent({ clusterId, clusterName }) {
           </div>
 
           <div className="relative">
-            <FiFilter className="pointer-events-none absolute left-3 top-1/2 h-4 w-4 -translate-y-1/2 text-[var(--color-secondary)]" />
+            <FiFilter className="pointer-events-none absolute left-3 top-1/2 h-3.5 w-3.5 -translate-y-1/2 text-[var(--color-secondary)]" />
             <select
               value={statusFilter}
               onChange={(e) => setStatusFilter(e.target.value)}
-              className="w-full appearance-none rounded-lg border border-[var(--color-border)] bg-[var(--color-bg)] py-2.5 pl-9 pr-3 text-sm text-[var(--color-text)] outline-none focus:border-[var(--color-primary)]"
+              className="w-full appearance-none rounded-lg border border-[var(--color-border)] bg-[var(--color-bg)] py-1.5 pl-8.5 pr-3 text-xs text-[var(--color-text)] outline-none focus:border-[var(--color-primary)]"
             >
               {STATUS_FILTERS.map((option) => (
                 <option key={option.value} value={option.value}>
@@ -391,11 +414,11 @@ function HistoryContent({ clusterId, clusterName }) {
 
         <div className="mt-3 grid gap-3 lg:grid-cols-[1fr_1fr]">
           <div className="relative">
-            <FiFilter className="pointer-events-none absolute left-3 top-1/2 h-4 w-4 -translate-y-1/2 text-[var(--color-secondary)]" />
+            <FiFilter className="pointer-events-none absolute left-3 top-1/2 h-3.5 w-3.5 -translate-y-1/2 text-[var(--color-secondary)]" />
             <select
               value={issueTypeFilter}
               onChange={(e) => setIssueTypeFilter(e.target.value)}
-              className="w-full appearance-none rounded-lg border border-[var(--color-border)] bg-[var(--color-bg)] py-2.5 pl-9 pr-3 text-sm text-[var(--color-text)] outline-none focus:border-[var(--color-primary)]"
+              className="w-full appearance-none rounded-lg border border-[var(--color-border)] bg-[var(--color-bg)] py-1.5 pl-8.5 pr-3 text-xs text-[var(--color-text)] outline-none focus:border-[var(--color-primary)]"
             >
               <option value="all">All Issue Types</option>
               {uniqueIssueTypes.map((type) => (
@@ -406,11 +429,11 @@ function HistoryContent({ clusterId, clusterName }) {
             </select>
           </div>
           <div className="relative">
-            <FiFilter className="pointer-events-none absolute left-3 top-1/2 h-4 w-4 -translate-y-1/2 text-[var(--color-secondary)]" />
+            <FiFilter className="pointer-events-none absolute left-3 top-1/2 h-3.5 w-3.5 -translate-y-1/2 text-[var(--color-secondary)]" />
             <select
               value={sortBy}
               onChange={(e) => setSortBy(e.target.value)}
-              className="w-full appearance-none rounded-lg border border-[var(--color-border)] bg-[var(--color-bg)] py-2.5 pl-9 pr-3 text-sm text-[var(--color-text)] outline-none focus:border-[var(--color-primary)]"
+              className="w-full appearance-none rounded-lg border border-[var(--color-border)] bg-[var(--color-bg)] py-1.5 pl-8.5 pr-3 text-xs text-[var(--color-text)] outline-none focus:border-[var(--color-primary)]"
             >
               {SORT_OPTIONS.map((option) => (
                 <option key={option.value} value={option.value}>
@@ -422,25 +445,22 @@ function HistoryContent({ clusterId, clusterName }) {
         </div>
       </div>
 
-      <div className="flex flex-wrap items-center justify-between gap-3 rounded-2xl border border-[var(--color-border)] bg-[var(--color-card)] px-4 py-3 shadow-[var(--shadow-card)]">
+      <div className="flex flex-wrap items-center justify-between gap-3 rounded-xl border border-[var(--color-border)] bg-[var(--color-card)] px-4 py-3.5 shadow-sm">
         <div>
-          <p className="text-sm font-medium text-[var(--color-text)]">Investigation Timeline</p>
-          <p className="text-xs text-[var(--color-secondary)]">
-            {sortedHistory.length} result(s) after filters · {stats.totalIssues} total issue(s)
-          </p>
-          <p className="mt-1 text-xs text-[var(--color-secondary)]">
-            Most affected namespace: {mostAffectedNamespace}
+          <p className="text-xs font-bold text-[var(--color-text)]">Timeline Results</p>
+          <p className="text-[10px] text-[var(--color-secondary)]">
+            {sortedHistory.length} result(s) · {stats.totalIssues} total issue(s)
           </p>
         </div>
-        <div className="flex flex-wrap gap-2 text-xs text-[var(--color-secondary)]">
-          <span className="inline-flex items-center gap-1 rounded-full border border-[var(--color-border)] px-3 py-1">
-            <span className="h-2 w-2 rounded-full bg-[var(--color-success)]" /> Healthy
+        <div className="flex flex-wrap gap-2 text-[10px] text-[var(--color-secondary)] font-semibold">
+          <span className="inline-flex items-center gap-1 rounded-full border border-[var(--color-border)] px-2.5 py-1">
+            <span className="h-1.5 w-1.5 rounded-full bg-[var(--color-success)]" /> Healthy
           </span>
-          <span className="inline-flex items-center gap-1 rounded-full border border-[var(--color-border)] px-3 py-1">
-            <span className="h-2 w-2 rounded-full bg-[var(--color-warning)]" /> Warning
+          <span className="inline-flex items-center gap-1 rounded-full border border-[var(--color-border)] px-2.5 py-1">
+            <span className="h-1.5 w-1.5 rounded-full bg-[var(--color-warning)] animate-pulse" /> Warning
           </span>
-          <span className="inline-flex items-center gap-1 rounded-full border border-[var(--color-border)] px-3 py-1">
-            <span className="h-2 w-2 rounded-full bg-[var(--color-danger)]" /> Critical
+          <span className="inline-flex items-center gap-1 rounded-full border border-[var(--color-border)] px-2.5 py-1">
+            <span className="h-1.5 w-1.5 rounded-full bg-[var(--color-danger)] animate-pulse" /> Critical
           </span>
         </div>
       </div>
@@ -452,8 +472,8 @@ function HistoryContent({ clusterId, clusterName }) {
           description="Try widening the time range or clearing the search term."
         />
       ) : (
-        <div className="rounded-2xl border border-[var(--color-border)] bg-[var(--color-card)] shadow-[var(--shadow-card)]">
-          <div className="divide-y divide-[var(--color-border)]">
+        <div className="rounded-xl border border-[var(--color-border)] bg-[var(--color-card)] shadow-sm">
+          <div className="divide-y divide-[var(--color-border)]/65">
             {paginatedHistory.map((item) => {
               const issues = parseIssues(item.issues);
               const groupedIssues = groupIssues(issues);
@@ -473,56 +493,51 @@ function HistoryContent({ clusterId, clusterName }) {
                   <button
                     type="button"
                     onClick={() => setExpandedId(isExpanded ? null : item.id)}
-                    className="flex w-full flex-col gap-4 px-4 py-4 text-left transition-colors hover:bg-[var(--color-bg)]/50 md:flex-row md:items-center md:justify-between md:px-5"
+                    className="flex w-full flex-col gap-4 px-4 py-4 text-left transition-colors hover:bg-[var(--color-bg)]/25 md:flex-row md:items-center md:justify-between md:px-5"
                   >
                     <div className="min-w-0 flex-1">
                       <div className="mb-2 flex flex-wrap items-center gap-2">
-                        <span className="rounded-full border border-[var(--color-border)] bg-[var(--color-bg)] px-2.5 py-1 text-[11px] font-semibold tracking-wide text-[var(--color-secondary)]">
+                        <span className="rounded bg-[var(--color-bg)] px-2 py-0.5 text-[9px] font-bold tracking-wide text-[var(--color-secondary)] border border-[var(--color-border)]">
                           {getInvestigationDisplayId(item.id)}
                         </span>
                         <StatusBadge status={item.status} />
-                        <span className="inline-flex items-center gap-1 rounded-full border border-[var(--color-border)] px-2.5 py-1 text-[11px] font-medium text-[var(--color-secondary)]">
-                          <Icon className="h-3.5 w-3.5" />
+                        <span className="inline-flex items-center gap-1 rounded-full border border-[var(--color-border)] px-2 py-0.5 text-[10px] font-bold text-[var(--color-secondary)]">
+                          <Icon className="h-3 w-3" />
                           {label}
                         </span>
                       </div>
 
-                      <p className="text-sm font-semibold text-[var(--color-text)]">
+                      <p className="text-xs font-bold text-[var(--color-text)]">
                         {formatDateTime(item.created_at)}
                       </p>
-                      <p className="mt-1 text-sm text-[var(--color-secondary)]">
+                      <p className="mt-1 text-xs text-[var(--color-secondary)] leading-relaxed">
                         {item.summary}
                       </p>
-                      <div className="mt-3 flex flex-wrap items-center gap-3 text-xs text-[var(--color-secondary)]">
-                        <span>{formatDuration(item)}</span>
+                      <div className="mt-3 flex flex-wrap items-center gap-3 text-[10px] text-[var(--color-secondary)]/80 font-medium">
+                        <span>Duration: {formatDuration(item)}</span>
                         <span>{issueCount} issue(s)</span>
-                        {mostCommonIssue && item === sortedHistory[0] && (
-                          <span>
-                            Most Common: {mostCommonIssue.type} ({mostCommonIssue.count})
-                          </span>
-                        )}
                       </div>
                     </div>
 
                     <div className="flex shrink-0 items-center gap-3 self-start md:self-center">
                       <div className="text-right">
-                        <p className="text-sm font-semibold text-[var(--color-text)]">
+                        <p className="text-xs font-bold text-[var(--color-text)]">
                           {issueCount === 0 ? "0 issues" : `${issueCount} issue${issueCount > 1 ? "s" : ""}`}
                         </p>
-                        <p className="text-xs text-[var(--color-secondary)]">
+                        <p className="text-[10px] text-[var(--color-secondary)]">
                           {label === "Healthy" ? "No action needed" : "Review details"}
                         </p>
                       </div>
                       {isExpanded ? (
-                        <FiChevronUp className="h-5 w-5 text-[var(--color-secondary)]" />
+                        <FiChevronUp className="h-4.5 w-4.5 text-[var(--color-secondary)]" />
                       ) : (
-                        <FiChevronDown className="h-5 w-5 text-[var(--color-secondary)]" />
+                        <FiChevronDown className="h-4.5 w-4.5 text-[var(--color-secondary)]" />
                       )}
                     </div>
                   </button>
 
                   {isExpanded && (
-                    <div className="border-t border-[var(--color-border)] bg-[var(--color-bg)]/30 px-4 py-4 md:px-5">
+                    <div className="border-t border-[var(--color-border)] bg-[var(--color-bg)]/20 px-4 py-4 md:px-5">
                       {issues.length === 0 ? (
                         <EmptyState
                           icon={FiCheckCircle}
@@ -531,38 +546,39 @@ function HistoryContent({ clusterId, clusterName }) {
                         />
                       ) : (
                         <div className="space-y-4">
-                          <div className="flex flex-wrap items-center gap-2 text-xs text-[var(--color-secondary)]">
-                            <span className="rounded-full border border-[var(--color-border)] px-2.5 py-1">
+                          <div className="flex flex-wrap items-center gap-2 text-[10px] text-[var(--color-secondary)] font-semibold">
+                            <span className="rounded-full border border-[var(--color-border)] bg-[var(--color-bg)] px-2.5 py-1">
                               {getMostAffectedNamespace(issues)} namespace most affected
                             </span>
-                            <span className="rounded-full border border-[var(--color-border)] px-2.5 py-1">
-                              Severity highlighted
-                            </span>
-                            <span className="rounded-full border border-[var(--color-border)] px-2.5 py-1">
+                            <span className="rounded-full border border-[var(--color-border)] bg-[var(--color-bg)] px-2.5 py-1">
                               Recommendation included
                             </span>
                           </div>
-                          <div className="rounded-xl border border-[var(--color-border)] bg-[var(--color-card)] p-4">
-                            <h4 className="text-sm font-semibold text-[var(--color-text)]">Summary</h4>
-                            <div className="mt-3 flex flex-wrap gap-2 text-xs font-medium">
-                              <span className="rounded-full border border-[var(--color-border)] bg-[var(--color-bg)] px-3 py-1 text-[var(--color-text)]">
+                          
+                          <div className="rounded-xl border border-[var(--color-border)] bg-[var(--color-card)] p-4 shadow-sm">
+                            <h4 className="text-xs font-bold text-[var(--color-text)]">Summary Analysis</h4>
+                            <div className="mt-3 flex flex-wrap gap-2 text-[10px] font-bold">
+                              <span className="rounded-full border border-[var(--color-border)] bg-[var(--color-bg)] px-2.5 py-1 text-[var(--color-text)]">
                                 {issues.length} Issues
                               </span>
-                              <span className="rounded-full border border-[var(--color-danger)]/30 bg-[var(--color-danger)]/10 px-3 py-1 text-[var(--color-danger)]">
+                              <span className="rounded-full border border-[var(--color-danger)]/25 bg-[var(--color-danger)]/8 px-2.5 py-1 text-[var(--color-danger)]">
                                 {issues.filter((issue) => (issue.severity || "").toLowerCase() === "high" || (issue.severity || "").toLowerCase() === "critical").length} Critical
                               </span>
-                              <span className="rounded-full border border-[var(--color-warning)]/30 bg-[var(--color-warning)]/10 px-3 py-1 text-[var(--color-warning)]">
+                              <span className="rounded-full border border-[var(--color-warning)]/25 bg-[var(--color-warning)]/8 px-2.5 py-1 text-[var(--color-warning)]">
                                 {issues.filter((issue) => (issue.severity || "").toLowerCase() === "medium").length} Medium
                               </span>
                             </div>
-                            <div className="mt-3 text-sm text-[var(--color-secondary)]">
+                            <div className="mt-3.5 space-y-1 text-xs text-[var(--color-secondary)] leading-relaxed">
                               <p>
-                                Most Common Issue: {getMostCommonIssue(issues)?.type || "None"}
+                                Most Common Issue: <span className="font-semibold text-[var(--color-text)]">{getMostCommonIssue(issues)?.type || "None"}</span>
                               </p>
-                              <p>Most Affected Namespace: {getMostAffectedNamespace(issues)}</p>
+                              <p>
+                                Most Affected Namespace: <span className="font-semibold text-[var(--color-text)]">{getMostAffectedNamespace(issues)}</span>
+                              </p>
                             </div>
                           </div>
-                          <div className="grid gap-3 md:grid-cols-2 xl:grid-cols-3">
+                          
+                          <div className="grid gap-4 md:grid-cols-2 xl:grid-cols-3">
                             {groupedIssues.map((issue) => (
                               <IssueCard
                                 key={`${item.id}-${issue.type}-${issue.namespace}`}
@@ -573,24 +589,11 @@ function HistoryContent({ clusterId, clusterName }) {
                               />
                             ))}
                           </div>
-                          <div className="rounded-xl border border-[var(--color-border)] bg-[var(--color-card)] p-4">
-                            <h4 className="text-sm font-semibold text-[var(--color-text)]">Issue timeline</h4>
-                            <p className="mt-1 text-sm text-[var(--color-secondary)]">
-                              {formatDateTime(item.created_at)}
-                            </p>
-                            <div className="mt-3 flex flex-wrap gap-2 text-xs text-[var(--color-secondary)]">
-                              {groupedIssues.slice(0, 4).map((issue) => (
-                                <span
-                                  key={`${item.id}-${issue.type}-${issue.namespace}`}
-                                  className="rounded-full border border-[var(--color-border)] px-2.5 py-1"
-                                >
-                                  {issue.type} ({issue.count})
-                                </span>
-                              ))}
-                            </div>
-                            <p className="mt-3 text-xs text-[var(--color-secondary)]">
-                              Duration: {formatDuration(item)}
-                            </p>
+                          
+                          <div className="rounded-xl border border-[var(--color-border)] bg-[var(--color-card)] p-4 shadow-sm text-xs text-[var(--color-secondary)] space-y-1 leading-relaxed">
+                            <h4 className="font-bold text-[var(--color-text)]">Diagnostic Info</h4>
+                            <p>Completed: {formatDateTime(item.created_at)}</p>
+                            <p>Duration: {formatDuration(item)}</p>
                           </div>
                         </div>
                       )}
@@ -603,23 +606,23 @@ function HistoryContent({ clusterId, clusterName }) {
 
           {filteredHistory.length > PAGE_SIZE && (
             <div className="flex flex-col gap-3 border-t border-[var(--color-border)] px-4 py-3 md:flex-row md:items-center md:justify-between md:px-5">
-              <p className="text-xs text-[var(--color-secondary)]">
+              <p className="text-[10px] text-[var(--color-secondary)] font-semibold">
                 Page {page} of {totalPages} ({filteredHistory.length} total)
               </p>
               <div className="flex gap-2">
                 <button
                   type="button"
                   disabled={page === 1}
-                  onClick={() => setPage((p) => p - 1)}
-                  className="rounded-md border border-[var(--color-border)] px-3 py-1 text-xs disabled:opacity-50"
+                  onClick={() => handlePageChange(page - 1)}
+                  className="rounded-lg border border-[var(--color-border)] bg-[var(--color-card)] px-3 py-1.5 text-xs font-semibold text-[var(--color-text)] hover:bg-[var(--color-bg)] disabled:opacity-50"
                 >
                   Previous
                 </button>
                 <button
                   type="button"
                   disabled={page === totalPages}
-                  onClick={() => setPage((p) => p + 1)}
-                  className="rounded-md border border-[var(--color-border)] px-3 py-1 text-xs disabled:opacity-50"
+                  onClick={() => handlePageChange(page + 1)}
+                  className="rounded-lg border border-[var(--color-border)] bg-[var(--color-card)] px-3 py-1.5 text-xs font-semibold text-[var(--color-text)] hover:bg-[var(--color-bg)] disabled:opacity-50"
                 >
                   Next
                 </button>
@@ -652,16 +655,16 @@ function History() {
   }
 
   return (
-    <div className="space-y-5">
+    <div className="space-y-6">
       <PageHeader
         title="Investigation History"
-        description="Review past investigations, filter results, and expand issue details"
+        description="Review past health logs, export reports, and inspect historical diagnostic telemetry"
         actions={
           clusters.length > 0 && (
             <select
               value={selectedClusterId}
               onChange={(e) => setSelectedClusterId(e.target.value)}
-              className="rounded-lg border border-[var(--color-border)] bg-[var(--color-card)] px-3 py-2 text-sm text-[var(--color-text)] outline-none focus:border-[var(--color-primary)]"
+              className="rounded-lg border border-[var(--color-border)] bg-[var(--color-card)] px-3 py-1.5 text-xs font-semibold text-[var(--color-text)] outline-none focus:border-[var(--color-primary)]"
             >
               {clusters.map((cluster) => (
                 <option key={cluster.id} value={cluster.id}>
@@ -679,30 +682,32 @@ function History() {
           title="No clusters available"
           description="Add a cluster before viewing investigation history."
           action={
-            <Link to="/clusters" className="text-sm text-[var(--color-primary)] hover:underline">
+            <Link to="/clusters" className="text-xs font-bold text-[var(--color-primary)] hover:underline">
               Add a cluster
             </Link>
           }
         />
       ) : (
-        <div className="rounded-2xl border border-[var(--color-border)] bg-[var(--color-card)] shadow-[var(--shadow-card)]">
-          <div className="flex flex-col gap-3 border-b border-[var(--color-border)] px-4 py-4 md:flex-row md:items-center md:justify-between md:px-5">
+        <div className="rounded-xl border border-[var(--color-border)] bg-[var(--color-card)] shadow-sm">
+          <div className="flex flex-col gap-3 border-b border-[var(--color-border)] px-5 py-4.5 md:flex-row md:items-center md:justify-between">
             <div>
-              <h2 className="font-semibold text-[var(--color-text)]">{selectedCluster?.name}</h2>
-              <p className="text-sm text-[var(--color-secondary)]">
-                  Timeline of all investigations for this cluster
+              <h2 className="text-sm font-bold text-[var(--color-text)]">{selectedCluster?.name}</h2>
+              <p className="text-xs text-[var(--color-secondary)]">
+                Historical log timeline of all investigations run for this cluster
               </p>
             </div>
             <Link
               to={`/clusters/${selectedClusterId}/investigate`}
-              className="inline-flex items-center gap-1.5 rounded-lg bg-[var(--color-primary)] px-4 py-2 text-sm font-medium text-white hover:opacity-90"
+              className="inline-flex items-center gap-1.5 rounded-lg bg-[var(--color-primary)] px-3 py-1.5 text-xs font-bold text-white hover:opacity-90"
             >
-              <FiSearch className="h-4 w-4" />
+              <FiSearch className="h-3.5 w-3.5" />
               Run new investigation
             </Link>
           </div>
           {selectedClusterId && (
-            <HistoryContent clusterId={selectedClusterId} clusterName={selectedCluster?.name} />
+            <div className="p-5">
+              <HistoryContent clusterId={selectedClusterId} clusterName={selectedCluster?.name} />
+            </div>
           )}
         </div>
       )}

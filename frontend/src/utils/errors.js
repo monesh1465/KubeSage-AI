@@ -2,7 +2,7 @@ export function getApiErrorMessage(error, fallback = "Something went wrong. Plea
   const detail = error?.response?.data?.detail;
 
   const normalizedClusterApiMessage =
-    "Unable to connect to the Kubernetes API server. Verify the cluster is running and kubeconfig server address is reachable.";
+    "Cluster connection lost. The Kubernetes API server is unreachable. Restart the cluster or upload an updated kubeconfig if needed.";
 
   if (typeof detail === "string") {
     if (
@@ -26,11 +26,11 @@ export function getApiErrorMessage(error, fallback = "Something went wrong. Plea
   }
 
   if (error?.message === "Network Error") {
-    return "Unable to reach the server. Check that the backend is running.";
+    return normalizedClusterApiMessage; 
   }
 
   if (error?.code === "ERR_NETWORK") {
-    return "Network error. Please check your connection and try again.";
+    return normalizedClusterApiMessage;
   }
 
   return fallback;

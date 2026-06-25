@@ -30,21 +30,24 @@ function Sidebar({ open, onClose }) {
 
   return (
     <aside
-      className={`fixed inset-y-16 left-0 z-30 flex w-72 shrink-0 flex-col border-r border-[var(--color-border)] bg-[var(--color-sidebar)] shadow-xl transition-transform duration-300 lg:static lg:inset-auto lg:z-0 lg:w-60 lg:translate-x-0 lg:shadow-none ${
+      className={`fixed inset-y-14 left-0 z-30 flex w-64 shrink-0 flex-col border-r border-[var(--color-border)] bg-[var(--color-sidebar)] transition-transform duration-200 lg:static lg:inset-auto lg:z-0 lg:w-56 lg:translate-x-0 ${
         open ? "translate-x-0" : "-translate-x-full"
       }`}
     >
-      <div className="flex items-center justify-between border-b border-[var(--color-border)] px-3 py-2 lg:hidden">
-        <p className="text-sm font-medium text-[var(--color-text)]">Navigation</p>
+      <div className="flex items-center justify-between border-b border-[var(--color-border)] px-4 py-3 lg:hidden">
+        <p className="text-xs font-semibold uppercase tracking-wider text-[var(--color-secondary)]">
+          Navigation
+        </p>
         <button
           type="button"
           onClick={onClose}
-          className="inline-flex h-8 w-8 items-center justify-center rounded-md border border-[var(--color-border)]"
+          className="inline-flex h-7 w-7 items-center justify-center rounded-md border border-[var(--color-border)] text-[var(--color-secondary)] hover:bg-[var(--color-bg)]"
           aria-label="Close menu"
         >
-          <FiX className="h-4 w-4" />
+          <FiX className="h-3.5 w-3.5" />
         </button>
       </div>
+
       <nav className="flex-1 space-y-1 p-3">
         {navItems.map(({ to, label, icon: Icon }) => (
           <NavLink
@@ -52,15 +55,23 @@ function Sidebar({ open, onClose }) {
             to={to}
             onClick={onClose}
             className={({ isActive }) =>
-              `flex items-center gap-3 rounded-xl px-3 py-2.5 text-sm font-medium transition-colors ${
+              `group flex items-center gap-3 rounded-lg px-3 py-2 text-xs font-semibold transition-all duration-150 ${
                 isActive
-                  ? "bg-[var(--color-primary)]/12 text-[var(--color-primary)]"
+                  ? "bg-[var(--color-primary)]/8 text-[var(--color-primary)] shadow-sm"
                   : "text-[var(--color-secondary)] hover:bg-[var(--color-bg)] hover:text-[var(--color-text)]"
               }`
             }
           >
-            <Icon className="h-4 w-4 shrink-0" />
-            {label}
+            {({ isActive }) => (
+              <>
+                <Icon
+                  className={`h-4 w-4 shrink-0 transition-transform group-hover:scale-105 ${
+                    isActive ? "text-[var(--color-primary)]" : "text-[var(--color-secondary)]/80 group-hover:text-[var(--color-text)]"
+                  }`}
+                />
+                <span>{label}</span>
+              </>
+            )}
           </NavLink>
         ))}
       </nav>
@@ -69,7 +80,7 @@ function Sidebar({ open, onClose }) {
         <button
           type="button"
           onClick={handleLogout}
-          className="flex w-full items-center gap-3 rounded-xl px-3 py-2.5 text-sm font-medium text-[var(--color-danger)] transition-colors hover:bg-[var(--color-danger)]/10"
+          className="flex w-full items-center gap-3 rounded-lg px-3 py-2 text-xs font-semibold text-[var(--color-danger)] transition-all duration-150 hover:bg-[var(--color-danger)]/8"
         >
           <FiLogOut className="h-4 w-4" />
           Logout

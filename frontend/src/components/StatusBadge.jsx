@@ -11,12 +11,15 @@ function StatusBadge({ status, size = "sm" }) {
   };
   const label = labelMap[lower] || value;
 
-  let className = "bg-[var(--color-secondary)]/15 text-[var(--color-secondary)]";
+  let dotColor = "bg-[var(--color-secondary)]";
+  let badgeColor = "bg-[var(--color-bg)] border-[var(--color-border)] text-[var(--color-secondary)]";
 
   if (isHealthyStatus(lower) || lower === "running" || lower === "active" || lower === "normal") {
-    className = "bg-[var(--color-success)]/15 text-[var(--color-success)]";
+    dotColor = "bg-[var(--color-success)] animate-pulse";
+    badgeColor = "bg-[var(--color-success)]/10 border-[var(--color-success)]/20 text-[var(--color-success)]";
   } else if (isWarningStatus(lower) || lower === "warning") {
-    className = "bg-[var(--color-warning)]/15 text-[var(--color-warning)]";
+    dotColor = "bg-[var(--color-warning)] animate-pulse";
+    badgeColor = "bg-[var(--color-warning)]/10 border-[var(--color-warning)]/20 text-[var(--color-warning)]";
   } else if (
     lower === "failed" ||
     lower === "disconnected" ||
@@ -24,15 +27,18 @@ function StatusBadge({ status, size = "sm" }) {
     lower === "high" ||
     lower === "critical"
   ) {
-    className = "bg-[var(--color-danger)]/15 text-[var(--color-danger)]";
-  } else if (lower === "info") {
-    className = "bg-[var(--color-primary)]/15 text-[var(--color-primary)]";
+    dotColor = "bg-[var(--color-danger)] animate-pulse";
+    badgeColor = "bg-[var(--color-danger)]/10 border-[var(--color-danger)]/20 text-[var(--color-danger)]";
+  } else if (lower === "info" || lower === "connected") {
+    dotColor = "bg-[var(--color-primary)]";
+    badgeColor = "bg-[var(--color-primary)]/10 border-[var(--color-primary)]/20 text-[var(--color-primary)]";
   }
 
-  const sizeClass = size === "md" ? "px-2.5 py-1 text-xs" : "px-2 py-0.5 text-xs";
+  const sizeClass = size === "md" ? "px-2.5 py-1 text-[11px]" : "px-2 py-0.5 text-[10px]";
 
   return (
-    <span className={`inline-flex rounded-full font-medium capitalize ${sizeClass} ${className}`}>
+    <span className={`inline-flex items-center gap-1.5 rounded-full border font-semibold capitalize ${sizeClass} ${badgeColor}`}>
+      <span className={`h-1.5 w-1.5 rounded-full ${dotColor}`} />
       {label}
     </span>
   );

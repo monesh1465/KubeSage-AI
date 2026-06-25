@@ -14,7 +14,6 @@ import DataTable from "../components/DataTable";
 import ErrorAlert from "../components/ErrorAlert";
 import EmptyState from "../components/EmptyState";
 import PageSkeleton from "../components/PageSkeleton";
-import LoadingSpinner from "../components/LoadingSpinner";
 import StatusBadge from "../components/StatusBadge";
 import TableSkeleton from "../components/TableSkeleton";
 import { useClusters } from "../context/ClusterContext";
@@ -27,7 +26,6 @@ import {
   getDeployments,
 } from "../services/clusterService";
 import { getApiErrorMessage } from "../utils/errors";
-import { runInvestigation } from "../services/investigationService";
 
 const tabs = [
   { key: "nodes", label: "Nodes", icon: FiServer },
@@ -54,7 +52,6 @@ function ClusterDetails() {
   });
   const [loadedTabs, setLoadedTabs] = useState({});
   const [tabLoading, setTabLoading] = useState(false);
-  const [investigating, setInvestigating] = useState(false);
   const [error, setError] = useState("");
 
   const fetchTabData = useCallback(
@@ -109,39 +106,6 @@ function ClusterDetails() {
     await fetchTabData(activeTab, true);
   };
 
-  const handleInvestigate = useCallback(async () => {
-    if (investigating || tabLoading) {
-      return;
-    }
-
-    if (cluster?.status !== "connected") {
-      setError("Cluster must be connected before running an investigation.");
-      return;
-    }
-
-    setInvestigating(true);
-    setError("");
-
-    try {
-      const result = await runInvestigation(id);
-      await refreshClusters();
-      toast.success("Investigation completed successfully.");
-      navigate(`/clusters/${id}/history`, {
-        state: { autoExpandLatest: true, investigationResult: result },
-      });
-    } catch (err) {
-      const message = getApiErrorMessage(
-        err,
-        "Investigation failed. Ensure the cluster API server is reachable."
-      );
-      setError(message);
-      toast.error(message);
-      await refreshClusters();
-    } finally {
-      setInvestigating(false);
-    }
-  }, [cluster?.status, id, investigating, navigate, refreshClusters, tabLoading, toast]);
-
   if (clustersLoading && !cluster) {
     return <PageSkeleton />;
   }
@@ -153,7 +117,7 @@ function ClusterDetails() {
         title="Cluster not found"
         description="This cluster may have been removed or you don't have access."
         action={
-          <Link to="/clusters" className="text-sm text-[var(--color-primary)] hover:underline">
+          <Link to="/clusters" className="text-xs font-semibold text-[var(--color-primary)] hover:underline">
             Back to clusters
           </Link>
         }
@@ -229,37 +193,28 @@ function ClusterDetails() {
   };
 
   const currentTable = tableConfig[activeTab];
-  const resourceLabel =
-    activeTab === "nodes"
-      ? "nodes"
-      : activeTab === "pods"
-        ? "pods"
-        : activeTab === "namespaces"
-          ? "namespaces"
-          : activeTab === "deployments"
-            ? "deployments"
-            : "events";
+  const resourceLabel = activeTab;
 
   return (
-    <div className="space-y-5">
+    <div className="space-y-6">
       <div className="flex flex-wrap items-start justify-between gap-4">
         <div>
           <Link
             to="/clusters"
-            className="mb-2 inline-flex items-center gap-1 text-sm text-[var(--color-secondary)] hover:text-[var(--color-primary)]"
+            className="mb-2 inline-flex items-center gap-1 text-xs font-semibold text-[var(--color-secondary)] hover:text-[var(--color-primary)]"
           >
-            <FiArrowLeft className="h-4 w-4" />
+            <FiArrowLeft className="h-3.5 w-3.5" />
             Back to clusters
           </Link>
           <div className="flex items-center gap-2">
-            <FiServer className="h-6 w-6 text-[var(--color-primary)]" />
-            <h1 className="text-2xl font-bold text-[var(--color-text)]">{cluster.name}</h1>
+            <FiServer className="h-5 w-5 text-[var(--color-primary)]" />
+            <h1 className="text-xl font-bold tracking-tight text-[var(--color-text)]">{cluster.name}</h1>
           </div>
-          <p className="mt-1 text-sm text-[var(--color-secondary)]">
-            {cluster.description || "No description"}
+          <p className="mt-1 text-xs text-[var(--color-secondary)]">
+            {cluster.description || "No description provided"}
           </p>
-          <div className="mt-2">
-            <StatusBadge status={cluster.status} size="md" />
+          <div className="mt-2.5">
+            <StatusBadge status={cluster.status} size="sm" />
           </div>
         </div>
 
@@ -268,46 +223,26 @@ function ClusterDetails() {
             type="button"
             onClick={handleRefreshAll}
             disabled={tabLoading || cluster.status !== "connected"}
-            className="inline-flex items-center gap-2 rounded-lg border border-[var(--color-border)] px-3 py-2 text-sm text-[var(--color-text)] hover:bg-[var(--color-bg)] disabled:opacity-50"
+            className="inline-flex items-center gap-1.5 rounded-lg border border-[var(--color-border)] bg-[var(--color-card)] px-3 py-1.5 text-xs font-semibold text-[var(--color-text)] transition-colors hover:bg-[var(--color-bg)] disabled:opacity-50"
           >
-            <FiRefreshCw className={`h-4 w-4 ${tabLoading ? "animate-spin" : ""}`} />
+            <FiRefreshCw className={`h-3.5 w-3.5 ${tabLoading ? "animate-spin" : ""}`} />
             Refresh
           </button>
-          <button
-            type="button"
-            onClick={handleInvestigate}
-            disabled={investigating || cluster.status !== "connected"}
-            className={`inline-flex items-center gap-2 rounded-lg px-4 py-2 text-sm font-medium text-white ${
-              cluster.status === "connected" && !investigating
-                ? "bg-[var(--color-primary)] hover:opacity-90"
-                : "bg-[var(--color-secondary)] opacity-50"
+          <Link
+            to={`/clusters/${id}/investigate`}
+            className={`inline-flex items-center gap-1.5 rounded-lg px-3 py-1.5 text-xs font-bold text-white transition-opacity hover:opacity-90 ${
+              cluster.status === "connected"
+                ? "bg-[var(--color-primary)]"
+                : "pointer-events-none bg-[var(--color-secondary)] opacity-50"
             }`}
           >
-            <FiSearch className={`h-4 w-4 ${investigating ? "animate-spin" : ""}`} />
-            {investigating ? "Running investigation..." : "Investigate"}
-          </button>
+            <FiSearch className="h-3.5 w-3.5" />
+            Investigate
+          </Link>
         </div>
       </div>
 
       <ErrorAlert message={error} onRetry={handleRefresh} />
-
-      {investigating && (
-        <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/50 p-4 backdrop-blur-sm">
-          <div className="w-full max-w-lg rounded-2xl border border-[var(--color-border)] bg-[var(--color-card)] p-6 shadow-[var(--shadow-card)]">
-            <div className="flex items-center gap-3">
-              <LoadingSpinner size="lg" />
-              <div>
-                <h2 className="text-lg font-semibold text-[var(--color-text)]">
-                  Running investigation...
-                </h2>
-                <p className="text-sm text-[var(--color-secondary)]">
-                  Analyzing nodes... Analyzing pods... Checking events... Generating report...
-                </p>
-              </div>
-            </div>
-          </div>
-        </div>
-      )}
 
       {cluster.status !== "connected" ? (
         <EmptyState
@@ -317,28 +252,28 @@ function ClusterDetails() {
           action={
             <Link
               to="/clusters"
-              className="inline-flex items-center gap-2 rounded-lg bg-[var(--color-primary)] px-4 py-2 text-sm font-medium text-white"
+              className="inline-flex items-center gap-2 rounded-lg bg-[var(--color-primary)] px-4 py-2 text-xs font-bold text-white"
             >
               Go to Clusters
             </Link>
           }
         />
       ) : (
-        <div className="rounded-2xl border border-[var(--color-border)] bg-[var(--color-card)] shadow-[var(--shadow-card)]">
+        <div className="rounded-xl border border-[var(--color-border)] bg-[var(--color-card)] shadow-sm">
           <div className="flex overflow-x-auto border-b border-[var(--color-border)]">
             {tabs.map((tab) => (
               <button
                 key={tab.key}
                 type="button"
                 onClick={() => setActiveTab(tab.key)}
-                className={`shrink-0 px-5 py-3 text-sm font-medium transition-colors hover:bg-[var(--color-bg)] ${
+                className={`relative shrink-0 px-4 py-3 text-xs font-bold transition-colors ${
                   activeTab === tab.key
-                    ? "border-b-2 border-[var(--color-primary)] text-[var(--color-primary)]"
+                    ? "text-[var(--color-primary)] after:absolute after:bottom-[-1px] after:left-0 after:right-0 after:h-[2px] after:bg-[var(--color-primary)] after:content-['']"
                     : "text-[var(--color-secondary)] hover:text-[var(--color-text)]"
                 }`}
               >
-                <span className="mr-2 inline-flex align-middle">
-                  <tab.icon className="h-4 w-4" />
+                <span className="mr-1.5 inline-flex align-middle">
+                  <tab.icon className="h-3.5 w-3.5" />
                 </span>
                 {tab.label}
               </button>

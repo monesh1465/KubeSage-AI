@@ -11,8 +11,8 @@ import Register from "./pages/Register";
 const Dashboard = lazy(() => import("./pages/Dashboard"));
 const Clusters = lazy(() => import("./pages/Clusters"));
 const ClusterDetails = lazy(() => import("./pages/ClusterDetails"));
-const Investigation = lazy(() => import("./pages/Investigation"));
 const Investigations = lazy(() => import("./pages/Investigations"));
+const Investigation = lazy(() => import("./pages/Investigation"));
 const History = lazy(() => import("./pages/History"));
 const Settings = lazy(() => import("./pages/Settings"));
 
@@ -66,18 +66,18 @@ function App() {
               }
             />
             <Route
-              path="/investigations"
-              element={
-                <Suspense fallback={<PageLoader />}>
-                  <Investigations />
-                </Suspense>
-              }
-            />
-            <Route
               path="/clusters/:id/investigate"
               element={
                 <Suspense fallback={<PageLoader />}>
                   <Investigation />
+                </Suspense>
+              }
+            />
+            <Route
+              path="/investigations"
+              element={
+                <Suspense fallback={<PageLoader />}>
+                  <Investigations />
                 </Suspense>
               }
             />

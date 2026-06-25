@@ -10,9 +10,7 @@ function DashboardLayout() {
   const [sidebarOpen, setSidebarOpen] = useState(false);
 
   useEffect(() => {
-    if (location.pathname === "/dashboard") {
-      refreshClusters().catch(() => {});
-    }
+    refreshClusters().catch(() => {});
     setSidebarOpen(false);
   }, [location.pathname, refreshClusters]);
 

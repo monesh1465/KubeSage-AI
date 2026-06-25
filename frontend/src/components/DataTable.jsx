@@ -64,28 +64,28 @@ function DataTable({
   return (
     <div>
       {searchable && (
-        <div className="border-b border-[var(--color-border)] px-4 py-3">
+        <div className="border-b border-[var(--color-border)] px-4 py-2.5">
           <div className="relative max-w-xs">
-            <FiSearch className="pointer-events-none absolute left-3 top-1/2 h-4 w-4 -translate-y-1/2 text-[var(--color-secondary)]" />
+            <FiSearch className="pointer-events-none absolute left-3 top-1/2 h-3.5 w-3.5 -translate-y-1/2 text-[var(--color-secondary)]" />
             <input
               type="text"
               value={query}
               onChange={(e) => setQuery(e.target.value)}
               placeholder={searchPlaceholder}
-              className="w-full rounded-lg border border-[var(--color-border)] bg-[var(--color-bg)] py-2 pl-9 pr-3 text-sm text-[var(--color-text)] outline-none focus:border-[var(--color-primary)]"
+              className="w-full rounded-lg border border-[var(--color-border)] bg-[var(--color-bg)] py-1.5 pl-8 pr-3 text-xs text-[var(--color-text)] outline-none transition-colors focus:border-[var(--color-primary)] focus:bg-[var(--color-card)]"
             />
           </div>
         </div>
       )}
 
       <div className="overflow-x-auto">
-        <table className="w-full min-w-[560px] text-left text-sm md:min-w-[640px]">
+        <table className="w-full min-w-[560px] text-left text-xs md:min-w-[640px]">
           <thead className={stickyHeader ? "sticky top-0 z-10" : ""}>
-            <tr className="border-b border-[var(--color-border)] bg-[var(--color-bg)]">
+            <tr className="border-b border-[var(--color-border)] bg-[var(--color-bg)]/45">
               {columns.map((col) => (
                 <th
                   key={col.key}
-                  className="px-3 py-3 font-medium text-[var(--color-secondary)] md:px-5"
+                  className="px-4 py-3 text-[10px] font-bold uppercase tracking-wider text-[var(--color-secondary)]"
                 >
                   {col.sortable === false ? (
                     col.label
@@ -97,8 +97,8 @@ function DataTable({
                     >
                       {col.label}
                       {sortKey === col.key && (
-                        <span className="text-[var(--color-primary)]">
-                          {sortDir === "asc" ? "↑" : "↓"}
+                        <span className="text-[var(--color-primary)] font-bold">
+                          {sortDir === "asc" ? " ↑" : " ↓"}
                         </span>
                       )}
                     </button>
@@ -107,21 +107,21 @@ function DataTable({
               ))}
             </tr>
           </thead>
-          <tbody className="divide-y divide-[var(--color-border)]">
+          <tbody className="divide-y divide-[var(--color-border)]/65">
             {filteredRows.length === 0 ? (
               <tr>
                 <td
                   colSpan={columns.length}
-                  className="px-3 py-8 text-center text-sm text-[var(--color-secondary)] md:px-5"
+                  className="px-4 py-8 text-center text-xs text-[var(--color-secondary)]"
                 >
                   No results match your search.
                 </td>
               </tr>
             ) : (
               filteredRows.map((row, idx) => (
-                <tr key={row.id ?? idx} className="hover:bg-[var(--color-bg)]/50">
+                <tr key={row.id ?? idx} className="hover:bg-[var(--color-bg)]/25 transition-colors">
                   {columns.map((col) => (
-                    <td key={col.key} className="px-3 py-3 text-[var(--color-text)] md:px-5">
+                    <td key={col.key} className="px-4 py-3 text-[var(--color-text)]">
                       {col.render ? col.render(row) : row[col.key]}
                     </td>
                   ))}

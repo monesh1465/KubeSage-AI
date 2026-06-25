@@ -42,15 +42,20 @@ function Register() {
   };
 
   return (
-    <div className="flex min-h-screen items-center justify-center bg-[var(--color-bg)] px-4">
-      <div className="w-full max-w-md rounded-xl border border-[var(--color-border)] bg-[var(--color-card)] p-8 shadow-sm">
+    <div className="relative flex min-h-screen items-center justify-center bg-[var(--color-bg)] px-4">
+      {/* Background Graphic Grid */}
+      <div className="absolute inset-0 z-0 bg-[linear-gradient(to_right,#e4e4e7_1px,transparent_1px),linear-gradient(to_bottom,#e4e4e7_1px,transparent_1px)] dark:bg-[linear-gradient(to_right,#27272a_1px,transparent_1px),linear-gradient(to_bottom,#27272a_1px,transparent_1px)] bg-[size:4rem_4rem] [mask-image:radial-gradient(ellipse_60%_50%_at_50%_50%,#000_70%,transparent_100%)] opacity-35" />
+
+      <div className="relative z-10 w-full max-w-sm rounded-xl border border-[var(--color-border)] bg-[var(--color-card)] p-8 shadow-premium">
         <div className="mb-6 text-center">
-          <div className="mx-auto mb-4 flex h-12 w-12 items-center justify-center rounded-lg bg-[var(--color-primary)]/10">
-            <FiActivity className="h-6 w-6 text-[var(--color-primary)]" />
+          <div className="mx-auto mb-4 flex h-10 w-10 items-center justify-center rounded-lg bg-[var(--color-primary)] text-white shadow-sm">
+            <FiActivity className="h-5 w-5" />
           </div>
-          <h1 className="text-2xl font-bold text-[var(--color-text)]">Create Account</h1>
-          <p className="mt-2 text-sm text-[var(--color-secondary)]">
-            Register to start managing your Kubernetes clusters
+          <h1 className="text-xl font-bold tracking-tight text-[var(--color-text)]">
+            Create Account
+          </h1>
+          <p className="mt-1.5 text-xs text-[var(--color-secondary)]">
+            Get started with KubeSage AI platform
           </p>
         </div>
 
@@ -58,8 +63,8 @@ function Register() {
 
         <form onSubmit={handleSubmit} className="space-y-4">
           <div>
-            <label className="mb-1.5 block text-sm font-medium text-[var(--color-text)]">
-              Name
+            <label className="mb-1 block text-[10px] font-bold uppercase tracking-wider text-[var(--color-text)]">
+              Full Name
             </label>
             <input
               type="text"
@@ -69,14 +74,14 @@ function Register() {
               autoComplete="name"
               value={formData.name}
               onChange={handleChange}
-              className="w-full rounded-lg border border-[var(--color-border)] bg-[var(--color-bg)] px-3 py-2.5 text-sm text-[var(--color-text)] outline-none focus:border-[var(--color-primary)]"
               placeholder="John Doe"
+              className="w-full rounded-lg border border-[var(--color-border)] bg-[var(--color-bg)] px-3 py-2 text-xs text-[var(--color-text)] outline-none transition-colors placeholder:text-zinc-400 dark:placeholder:text-zinc-500 focus:border-[var(--color-primary)] focus:bg-[var(--color-card)]"
             />
           </div>
 
           <div>
-            <label className="mb-1.5 block text-sm font-medium text-[var(--color-text)]">
-              Email
+            <label className="mb-1 block text-[10px] font-bold uppercase tracking-wider text-[var(--color-text)]">
+              Email Address
             </label>
             <input
               type="email"
@@ -85,12 +90,13 @@ function Register() {
               autoComplete="email"
               value={formData.email}
               onChange={handleChange}
-              className="w-full rounded-lg border border-[var(--color-border)] bg-[var(--color-bg)] px-3 py-2.5 text-sm text-[var(--color-text)] outline-none focus:border-[var(--color-primary)]"
+              placeholder="name@company.com"
+              className="w-full rounded-lg border border-[var(--color-border)] bg-[var(--color-bg)] px-3 py-2 text-xs text-[var(--color-text)] outline-none transition-colors placeholder:text-zinc-400 dark:placeholder:text-zinc-500 focus:border-[var(--color-primary)] focus:bg-[var(--color-card)]"
             />
           </div>
 
           <div>
-            <label className="mb-1.5 block text-sm font-medium text-[var(--color-text)]">
+            <label className="mb-1 block text-[10px] font-bold uppercase tracking-wider text-[var(--color-text)]">
               Password
             </label>
             <input
@@ -101,22 +107,23 @@ function Register() {
               autoComplete="new-password"
               value={formData.password}
               onChange={handleChange}
-              className="w-full rounded-lg border border-[var(--color-border)] bg-[var(--color-bg)] px-3 py-2.5 text-sm text-[var(--color-text)] outline-none focus:border-[var(--color-primary)]"
+              placeholder="••••••••"
+              className="w-full rounded-lg border border-[var(--color-border)] bg-[var(--color-bg)] px-3 py-2 text-xs text-[var(--color-text)] outline-none transition-colors placeholder:text-zinc-400 dark:placeholder:text-zinc-500 focus:border-[var(--color-primary)] focus:bg-[var(--color-card)]"
             />
           </div>
 
           <button
             type="submit"
             disabled={loading}
-            className="flex w-full items-center justify-center gap-2 rounded-lg bg-[var(--color-primary)] px-4 py-2.5 text-sm font-medium text-white transition-opacity hover:opacity-90 disabled:opacity-60"
+            className="flex w-full items-center justify-center gap-2 rounded-lg bg-[var(--color-primary)] px-4 py-2 text-xs font-semibold text-white transition-opacity hover:opacity-90 disabled:opacity-60"
           >
             {loading ? <LoadingSpinner size="sm" /> : "Create Account"}
           </button>
         </form>
 
-        <p className="mt-6 text-center text-sm text-[var(--color-secondary)]">
+        <p className="mt-6 text-center text-xs text-[var(--color-secondary)]">
           Already have an account?{" "}
-          <Link to="/" className="font-medium text-[var(--color-primary)] hover:underline">
+          <Link to="/" className="font-semibold text-[var(--color-primary)] hover:underline">
             Sign In
           </Link>
         </p>
