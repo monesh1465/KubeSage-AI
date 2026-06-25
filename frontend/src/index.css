@@ -1,13 +1,73 @@
 @import "tailwindcss";
 
-body {
-  margin: 0;
-  min-height: 100vh;
-  background: #0f172a;
-  color: #f8fafc;
-  font-family: Inter, system-ui, sans-serif;
+@custom-variant dark (&:where(.dark, .dark *));
+
+@theme {
+  --font-sans: "Inter", system-ui, sans-serif;
+}
+
+:root {
+  --color-bg: #f8fafc;
+  --color-sidebar: #ffffff;
+  --color-card: #ffffff;
+  --color-primary: #2563eb;
+  --color-text: #0f172a;
+  --color-secondary: #475569;
+  --color-success: #059669;
+  --color-warning: #d97706;
+  --color-danger: #dc2626;
+  --color-border: #cbd5e1;
+}
+
+.dark {
+  --color-bg: #0f172a;
+  --color-sidebar: #111827;
+  --color-card: #1e293b;
+  --color-primary: #3b82f6;
+  --color-text: #f8fafc;
+  --color-secondary: #94a3b8;
+  --color-success: #10b981;
+  --color-warning: #f59e0b;
+  --color-danger: #ef4444;
+  --color-border: #334155;
 }
 
 * {
   box-sizing: border-box;
+}
+
+html {
+  transition: background-color 0.2s ease, color 0.2s ease;
+}
+
+body {
+  margin: 0;
+  min-height: 100vh;
+  background-color: var(--color-bg);
+  color: var(--color-text);
+  font-family: var(--font-sans);
+  -webkit-font-smoothing: antialiased;
+  -moz-osx-font-smoothing: grayscale;
+}
+
+#root {
+  min-height: 100vh;
+}
+
+button:not(:disabled),
+label[for],
+a {
+  cursor: pointer;
+}
+
+input:disabled,
+button:disabled {
+  cursor: not-allowed;
+}
+
+.line-clamp-2 {
+  display: -webkit-box;
+  -webkit-line-clamp: 2;
+  -webkit-box-orient: vertical;
+  overflow: hidden;
 }

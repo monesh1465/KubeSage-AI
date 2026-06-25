@@ -4,18 +4,18 @@ clusters:
     certificate-authority: C:\Users\monis\.minikube\ca.crt
     extensions:
     - extension:
-        last-update: Wed, 24 Jun 2026 20:43:16 IST
+        last-update: Thu, 25 Jun 2026 08:04:58 IST
         provider: minikube.sigs.k8s.io
         version: v1.38.1
       name: cluster_info
-    server: https://127.0.0.1:57003
+    server: https://127.0.0.1:56553
   name: minikube
 contexts:
 - context:
     cluster: minikube
     extensions:
     - extension:
-        last-update: Wed, 24 Jun 2026 20:43:16 IST
+        last-update: Thu, 25 Jun 2026 08:04:58 IST
         provider: minikube.sigs.k8s.io
         version: v1.38.1
       name: context_info

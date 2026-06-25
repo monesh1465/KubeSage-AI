@@ -56,6 +56,9 @@ def investigate_cluster(
     # Pod checks
     for pod in pods:
 
+        if pod["namespace"] == "kube-system":
+            continue
+        
         if pod["status"] == "Pending":
             issues.append({
                 "type":
@@ -143,6 +146,9 @@ def investigate_cluster(
 
     # Event checks
     for event in events:
+        if event["namespace"] == "kube-system":
+            continue
+
         if (
             event["kind"] == "Pod" 
             and event["resource"]
@@ -180,7 +186,8 @@ def investigate_cluster(
 
     # Deployment checks
     for deployment in deployments:
-
+        if deployment["namespace"] == "kube-system":
+            continue
         if (
             deployment["desired"]
             != deployment["available"]
