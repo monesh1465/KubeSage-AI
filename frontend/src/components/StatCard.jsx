@@ -7,7 +7,7 @@ function StatCard({ title, value, icon: Icon, variant = "default" }) {
   };
 
   return (
-    <div className="rounded-lg border border-[var(--color-border)] bg-[var(--color-card)] p-5">
+    <div className="group rounded-2xl border border-[var(--color-border)] bg-[var(--color-card)] p-5 shadow-[var(--shadow-card)] transition-all duration-200 hover:-translate-y-0.5 hover:shadow-[0_18px_45px_rgba(0,0,0,0.16)]">
       <div className="flex items-start justify-between">
         <div>
           <p className="text-sm text-[var(--color-secondary)]">{title}</p>

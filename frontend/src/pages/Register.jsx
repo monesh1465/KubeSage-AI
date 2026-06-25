@@ -86,7 +86,6 @@ function Register() {
               value={formData.email}
               onChange={handleChange}
               className="w-full rounded-lg border border-[var(--color-border)] bg-[var(--color-bg)] px-3 py-2.5 text-sm text-[var(--color-text)] outline-none focus:border-[var(--color-primary)]"
-              placeholder="you@company.com"
             />
           </div>
 
@@ -103,7 +102,6 @@ function Register() {
               value={formData.password}
               onChange={handleChange}
               className="w-full rounded-lg border border-[var(--color-border)] bg-[var(--color-bg)] px-3 py-2.5 text-sm text-[var(--color-text)] outline-none focus:border-[var(--color-primary)]"
-              placeholder="At least 6 characters"
             />
           </div>
 

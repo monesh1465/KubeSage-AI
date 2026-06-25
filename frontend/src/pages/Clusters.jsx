@@ -8,7 +8,11 @@ import LoadingSpinner from "../components/LoadingSpinner";
 import PageSkeleton from "../components/PageSkeleton";
 import { useClusters } from "../context/ClusterContext";
 import { useToast } from "../context/ToastContext";
-import { createCluster, uploadKubeconfig } from "../services/clusterService";
+import {
+  createCluster,
+  deleteCluster,
+  uploadKubeconfig,
+} from "../services/clusterService";
 import { getApiErrorMessage } from "../utils/errors";
 
 function Clusters() {
@@ -17,6 +21,7 @@ function Clusters() {
   const [showModal, setShowModal] = useState(false);
   const [creating, setCreating] = useState(false);
   const [uploadingId, setUploadingId] = useState(null);
+  const [removingId, setRemovingId] = useState(null);
   const [formError, setFormError] = useState("");
   const [formData, setFormData] = useState({ name: "", description: "" });
 
@@ -35,6 +40,25 @@ function Clusters() {
       setFormError(getApiErrorMessage(err, "Failed to create cluster."));
     } finally {
       setCreating(false);
+    }
+  };
+
+  const handleRemoveCluster = async (cluster) => {
+    const confirmed = window.confirm(
+      `Remove cluster "${cluster.name}"? This also deletes investigation history for this cluster.`
+    );
+
+    if (!confirmed) return;
+
+    setRemovingId(cluster.id);
+    try {
+      await deleteCluster(cluster.id);
+      await refreshClusters();
+      toast.success("Cluster removed successfully.");
+    } catch (err) {
+      toast.error(getApiErrorMessage(err, "Failed to remove cluster."));
+    } finally {
+      setRemovingId(null);
     }
   };
 
@@ -101,7 +125,9 @@ function Clusters() {
               key={cluster.id}
               cluster={cluster}
               uploading={uploadingId === cluster.id}
+              removing={removingId === cluster.id}
               onUploadKubeconfig={handleUploadKubeconfig}
+              onRemoveCluster={handleRemoveCluster}
             />
           ))}
         </div>

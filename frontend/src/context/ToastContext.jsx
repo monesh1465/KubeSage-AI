@@ -4,6 +4,7 @@ import ToastContainer from "../components/ToastContainer";
 const ToastContext = createContext(null);
 
 let toastId = 0;
+const MAX_TOASTS = 3;
 
 export function ToastProvider({ children }) {
   const [toasts, setToasts] = useState([]);
@@ -14,7 +15,18 @@ export function ToastProvider({ children }) {
 
   const addToast = useCallback((message, type = "info", duration = 4000) => {
     const id = ++toastId;
-    setToasts((prev) => [...prev, { id, message, type }]);
+    setToasts((prev) => {
+      const duplicateExists = prev.some(
+        (toast) => toast.type === type && toast.message === message
+      );
+
+      if (duplicateExists) {
+        return prev;
+      }
+
+      const next = [...prev, { id, message, type }];
+      return next.slice(-MAX_TOASTS);
+    });
 
     if (duration > 0) {
       window.setTimeout(() => removeToast(id), duration);

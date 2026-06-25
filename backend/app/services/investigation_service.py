@@ -1,6 +1,9 @@
 import json
+import time
+from datetime import datetime, timedelta, timezone
 
 from app.models.investigation import Investigation
+from app.models.investigation_run import InvestigationRun
 
 from app.services.kubernetes_service import (
     get_cluster_nodes,
@@ -10,11 +13,40 @@ from app.services.kubernetes_service import (
 )
 
 
+def normalize_resource_name(resource_name: str):
+    if not resource_name or resource_name == "-":
+        return "Unknown"
+
+    parts = resource_name.split("-")
+    if len(parts) >= 3 and len(parts[-1]) >= 5 and len(parts[-2]) >= 5:
+        return "-".join(parts[:-2])
+
+    return resource_name
+
+
+def build_issue(
+    issue_type: str,
+    resource: str,
+    namespace: str,
+    severity: str,
+    recommendation: str,
+):
+    return {
+        "type": issue_type,
+        "resource": normalize_resource_name(resource),
+        "namespace": namespace,
+        "severity": severity,
+        "recommendation": recommendation,
+    }
+
+
 def investigate_cluster(
     db,
     cluster_id: int,
     kubeconfig_path: str
 ):
+    started_at = datetime.now(timezone.utc)
+    started_perf = time.perf_counter()
     issues = []
 
     nodes = get_cluster_nodes(
@@ -40,18 +72,15 @@ def investigate_cluster(
     # Node checks
     for node in nodes:
         if node["status"] != "Ready":
-            issues.append({
-                "type":
+            issues.append(
+                build_issue(
                     "NodeNotReady",
-                "resource":
                     node["name"],
-                "namespace":
                     "-",
-                "severity":
                     "High",
-                "recommendation":
                     "Check kubelet and node resources."
-            })
+                )
+            )
 
     # Pod checks
     for pod in pods:
@@ -60,89 +89,71 @@ def investigate_cluster(
             continue
         
         if pod["status"] == "Pending":
-            issues.append({
-                "type":
+            issues.append(
+                build_issue(
                     "PodPending",
-                "resource":
                     pod["name"],
-                "namespace":
                     pod["namespace"],
-                "severity":
                     "Medium",
-                "recommendation":
                     "Check scheduling events."
-            })
+                )
+            )
 
         elif pod["status"] == "ImagePullBackOff":
-            issues.append({
-                "type":
+            issues.append(
+                build_issue(
                     "ImagePullBackOff",
-                "resource":
                     pod["name"],
-                "namespace":
                     pod["namespace"],
-                "severity":
                     "High",
-                "recommendation":
                     "Verify image name and tag."
-            })
+                )
+            )
 
         elif pod["status"] == "ErrImagePull":
-            issues.append({
-                "type":
+            issues.append(
+                build_issue(
                     "ErrImagePull",
-                "resource":
                     pod["name"],
-                "namespace":
                     pod["namespace"],
-                "severity":
                     "High",
-                "recommendation":
                     "Image could not be pulled. Check image repository and credentials."
-            })
+                )
+            )
 
         elif pod["status"] == "CrashLoopBackOff":
-            issues.append({
-                "type":
+            issues.append(
+                build_issue(
                     "CrashLoopBackOff",
-                "resource":
                     pod["name"],
-                "namespace":
                     pod["namespace"],
-                "severity":
                     "High",
-                "recommendation":
-                    "Check application logs and container startup commands."
-            })
+                    "Check application logs, container startup commands, and probe failures."
+                )
+            )
 
         elif pod["status"] == "OOMKilled":
-            issues.append({
-                "type":
+            issues.append(
+                build_issue(
                     "OOMKilled",
-                "resource":
                     pod["name"],
-                "namespace":
                     pod["namespace"],
-                "severity":
                     "High",
-                "recommendation":
                     "Increase memory limits or optimize application memory usage."
-            })
+                )
+            )
 
         # Rule 9
         if pod.get("restart_count", 0) > 5:
-            issues.append({
-                "type":
+            issues.append(
+                build_issue(
                     "HighRestartCount",
-                "resource":
                     pod["name"],
-                "namespace":
                     pod["namespace"],
-                "severity":
                     "High",
-                "recommendation":
                     "Check logs and health probes."
-            })
+                )
+            )
 
     # Event checks
     for event in events:
@@ -157,32 +168,26 @@ def investigate_cluster(
             continue
         
         if event["reason"] == "FailedScheduling":
-            issues.append({
-                "type":
+            issues.append(
+                build_issue(
                     "FailedScheduling",
-                "resource":
-                    "-",
-                "namespace":
+                    event.get("resource") or "Unknown",
                     event["namespace"],
-                "severity":
                     "High",
-                "recommendation":
                     "Check CPU, memory, taints and node selectors."
-            })
+                )
+            )
 
         elif event["reason"] == "FailedMount":
-            issues.append({
-                "type":
+            issues.append(
+                build_issue(
                     "FailedMount",
-                "resource":
-                    "-",
-                "namespace":
+                    event.get("resource") or "Unknown",
                     event["namespace"],
-                "severity":
                     "High",
-                "recommendation":
                     "Verify PVC and volume configuration."
-            })
+                )
+            )
 
     # Deployment checks
     for deployment in deployments:
@@ -192,42 +197,83 @@ def investigate_cluster(
             deployment["desired"]
             != deployment["available"]
         ):
-            issues.append({
-                "type":
+            issues.append(
+                build_issue(
                     "ReplicaMismatch",
-                "resource":
                     deployment["name"],
-                "namespace":
                     deployment["namespace"],
-                "severity":
                     "Medium",
-                "recommendation":
                     "Investigate deployment rollout."
-            })
+                )
+            )
 
     # Final summary
     if issues:
-        cluster_status = "Warning"
-        summary = (
-            f"{len(issues)} issue(s) detected."
-        )
+        if any(issue["severity"] == "High" for issue in issues):
+            cluster_status = "Critical"
+        else:
+            cluster_status = "Warning"
+        summary = f"{len(issues)} issue(s) detected."
     else:
         cluster_status = "Healthy"
-        summary = (
-            "All nodes are Ready and "
-            "all pods are Running."
-        )
+        summary = "All nodes are Ready and all pods are Running."
 
-    # Save investigation
-    investigation = Investigation(
-        cluster_id=cluster_id,
-        status=cluster_status,
-        summary=summary,
-        issues=json.dumps(issues)
+    issues_json = json.dumps(issues, sort_keys=True)
+
+    latest = (
+        db.query(Investigation)
+        .filter(Investigation.cluster_id == cluster_id)
+        .order_by(Investigation.created_at.desc())
+        .first()
     )
 
-    db.add(investigation)
-    db.commit()
+    should_insert = True
+    if latest:
+        latest_created_at = latest.created_at
+        if latest_created_at and latest_created_at.tzinfo is None:
+            latest_created_at = latest_created_at.replace(tzinfo=timezone.utc)
+
+        within_dedupe_window = (
+            latest_created_at is not None
+            and datetime.now(timezone.utc) - latest_created_at < timedelta(seconds=300)
+        )
+
+        same_payload = (
+            latest.status == cluster_status
+            and latest.summary == summary
+            and latest.issues == issues_json
+        )
+
+        if within_dedupe_window and same_payload:
+            should_insert = False
+
+    if should_insert:
+        investigation = Investigation(
+            cluster_id=cluster_id,
+            status=cluster_status,
+            summary=summary,
+            issues=issues_json,
+        )
+
+        db.add(investigation)
+        db.commit()
+        db.refresh(investigation)
+
+        completed_at = datetime.now(timezone.utc)
+        duration_seconds = max(time.perf_counter() - started_perf, 0.0)
+
+        run = InvestigationRun(
+            investigation_id=investigation.id,
+            cluster_id=cluster_id,
+            started_at=started_at,
+            completed_at=completed_at,
+            duration_seconds=duration_seconds,
+        )
+        db.add(run)
+        db.commit()
+
+    completed_at = datetime.now(timezone.utc)
+    duration_seconds = max(time.perf_counter() - started_perf, 0.0)
 
     return {
         "cluster_status":
@@ -235,5 +281,8 @@ def investigate_cluster(
         "issues":
             issues,
         "summary":
-            summary
+            summary,
+        "started_at": started_at,
+        "completed_at": completed_at,
+        "duration_seconds": duration_seconds,
     }

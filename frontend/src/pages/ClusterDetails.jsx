@@ -1,10 +1,20 @@
 import { useCallback, useEffect, useState } from "react";
-import { Link, useParams } from "react-router-dom";
-import { FiRefreshCw, FiSearch, FiArrowLeft, FiDatabase, FiUpload } from "react-icons/fi";
+import { Link, useNavigate, useParams } from "react-router-dom";
+import {
+  FiRefreshCw,
+  FiSearch,
+  FiArrowLeft,
+  FiDatabase,
+  FiUpload,
+  FiCloudOff,
+  FiLayers,
+  FiServer,
+} from "react-icons/fi";
 import DataTable from "../components/DataTable";
 import ErrorAlert from "../components/ErrorAlert";
 import EmptyState from "../components/EmptyState";
 import PageSkeleton from "../components/PageSkeleton";
+import LoadingSpinner from "../components/LoadingSpinner";
 import StatusBadge from "../components/StatusBadge";
 import TableSkeleton from "../components/TableSkeleton";
 import { useClusters } from "../context/ClusterContext";
@@ -14,18 +24,22 @@ import {
   getPods,
   getNamespaces,
   getEvents,
+  getDeployments,
 } from "../services/clusterService";
 import { getApiErrorMessage } from "../utils/errors";
+import { runInvestigation } from "../services/investigationService";
 
 const tabs = [
-  { key: "nodes", label: "Nodes" },
-  { key: "pods", label: "Pods" },
-  { key: "namespaces", label: "Namespaces" },
-  { key: "events", label: "Events" },
+  { key: "nodes", label: "Nodes", icon: FiServer },
+  { key: "pods", label: "Pods", icon: FiSearch },
+  { key: "namespaces", label: "Namespaces", icon: FiDatabase },
+  { key: "deployments", label: "Deployments", icon: FiLayers },
+  { key: "events", label: "Events", icon: FiCloudOff },
 ];
 
 function ClusterDetails() {
   const { id } = useParams();
+  const navigate = useNavigate();
   const toast = useToast();
   const { getClusterById, refreshClusters, loading: clustersLoading } = useClusters();
   const cluster = getClusterById(id);
@@ -35,10 +49,12 @@ function ClusterDetails() {
     nodes: [],
     pods: [],
     namespaces: [],
+    deployments: [],
     events: [],
   });
   const [loadedTabs, setLoadedTabs] = useState({});
   const [tabLoading, setTabLoading] = useState(false);
+  const [investigating, setInvestigating] = useState(false);
   const [error, setError] = useState("");
 
   const fetchTabData = useCallback(
@@ -53,10 +69,12 @@ function ClusterDetails() {
         if (tab === "nodes") data = await getNodes(id);
         if (tab === "pods") data = await getPods(id);
         if (tab === "namespaces") data = await getNamespaces(id);
+        if (tab === "deployments") data = await getDeployments(id);
         if (tab === "events") data = await getEvents(id);
 
         setResources((prev) => ({ ...prev, [tab]: data }));
         setLoadedTabs((prev) => ({ ...prev, [tab]: true }));
+        await refreshClusters();
         if (showToast) toast.success(`${tab} refreshed.`);
       } catch (err) {
         const message = getApiErrorMessage(
@@ -64,12 +82,13 @@ function ClusterDetails() {
           `Failed to load ${tab}. Ensure the cluster API is reachable.`
         );
         setError(message);
+        await refreshClusters();
         if (showToast) toast.error(message);
       } finally {
         setTabLoading(false);
       }
     },
-    [cluster?.status, id, toast]
+    [cluster?.status, id, refreshClusters, toast]
   );
 
   useEffect(() => {
@@ -89,6 +108,39 @@ function ClusterDetails() {
     await refreshClusters();
     await fetchTabData(activeTab, true);
   };
+
+  const handleInvestigate = useCallback(async () => {
+    if (investigating || tabLoading) {
+      return;
+    }
+
+    if (cluster?.status !== "connected") {
+      setError("Cluster must be connected before running an investigation.");
+      return;
+    }
+
+    setInvestigating(true);
+    setError("");
+
+    try {
+      const result = await runInvestigation(id);
+      await refreshClusters();
+      toast.success("Investigation completed successfully.");
+      navigate(`/clusters/${id}/history`, {
+        state: { autoExpandLatest: true, investigationResult: result },
+      });
+    } catch (err) {
+      const message = getApiErrorMessage(
+        err,
+        "Investigation failed. Ensure the cluster API server is reachable."
+      );
+      setError(message);
+      toast.error(message);
+      await refreshClusters();
+    } finally {
+      setInvestigating(false);
+    }
+  }, [cluster?.status, id, investigating, navigate, refreshClusters, tabLoading, toast]);
 
   if (clustersLoading && !cluster) {
     return <PageSkeleton />;
@@ -148,6 +200,21 @@ function ClusterDetails() {
       rows: resources.namespaces,
       emptyMessage: "No namespaces found",
     },
+    deployments: {
+      columns: [
+        { key: "name", label: "Name" },
+        { key: "namespace", label: "Namespace" },
+        { key: "desired", label: "Desired" },
+        { key: "available", label: "Available" },
+        {
+          key: "status",
+          label: "Status",
+          render: (row) => <StatusBadge status={row.status} />,
+        },
+      ],
+      rows: resources.deployments,
+      emptyMessage: "No deployments found",
+    },
     events: {
       columns: [
         { key: "namespace", label: "Namespace" },
@@ -162,6 +229,16 @@ function ClusterDetails() {
   };
 
   const currentTable = tableConfig[activeTab];
+  const resourceLabel =
+    activeTab === "nodes"
+      ? "nodes"
+      : activeTab === "pods"
+        ? "pods"
+        : activeTab === "namespaces"
+          ? "namespaces"
+          : activeTab === "deployments"
+            ? "deployments"
+            : "events";
 
   return (
     <div className="space-y-5">
@@ -174,7 +251,10 @@ function ClusterDetails() {
             <FiArrowLeft className="h-4 w-4" />
             Back to clusters
           </Link>
-          <h1 className="text-2xl font-bold text-[var(--color-text)]">{cluster.name}</h1>
+          <div className="flex items-center gap-2">
+            <FiServer className="h-6 w-6 text-[var(--color-primary)]" />
+            <h1 className="text-2xl font-bold text-[var(--color-text)]">{cluster.name}</h1>
+          </div>
           <p className="mt-1 text-sm text-[var(--color-secondary)]">
             {cluster.description || "No description"}
           </p>
@@ -193,21 +273,41 @@ function ClusterDetails() {
             <FiRefreshCw className={`h-4 w-4 ${tabLoading ? "animate-spin" : ""}`} />
             Refresh
           </button>
-          <Link
-            to={`/clusters/${id}/investigate`}
+          <button
+            type="button"
+            onClick={handleInvestigate}
+            disabled={investigating || cluster.status !== "connected"}
             className={`inline-flex items-center gap-2 rounded-lg px-4 py-2 text-sm font-medium text-white ${
-              cluster.status === "connected"
+              cluster.status === "connected" && !investigating
                 ? "bg-[var(--color-primary)] hover:opacity-90"
-                : "pointer-events-none bg-[var(--color-secondary)] opacity-50"
+                : "bg-[var(--color-secondary)] opacity-50"
             }`}
           >
-            <FiSearch className="h-4 w-4" />
-            Investigate
-          </Link>
+            <FiSearch className={`h-4 w-4 ${investigating ? "animate-spin" : ""}`} />
+            {investigating ? "Running investigation..." : "Investigate"}
+          </button>
         </div>
       </div>
 
       <ErrorAlert message={error} onRetry={handleRefresh} />
+
+      {investigating && (
+        <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/50 p-4 backdrop-blur-sm">
+          <div className="w-full max-w-lg rounded-2xl border border-[var(--color-border)] bg-[var(--color-card)] p-6 shadow-[var(--shadow-card)]">
+            <div className="flex items-center gap-3">
+              <LoadingSpinner size="lg" />
+              <div>
+                <h2 className="text-lg font-semibold text-[var(--color-text)]">
+                  Running investigation...
+                </h2>
+                <p className="text-sm text-[var(--color-secondary)]">
+                  Analyzing nodes... Analyzing pods... Checking events... Generating report...
+                </p>
+              </div>
+            </div>
+          </div>
+        </div>
+      )}
 
       {cluster.status !== "connected" ? (
         <EmptyState
@@ -224,19 +324,22 @@ function ClusterDetails() {
           }
         />
       ) : (
-        <div className="rounded-lg border border-[var(--color-border)] bg-[var(--color-card)]">
+        <div className="rounded-2xl border border-[var(--color-border)] bg-[var(--color-card)] shadow-[var(--shadow-card)]">
           <div className="flex overflow-x-auto border-b border-[var(--color-border)]">
             {tabs.map((tab) => (
               <button
                 key={tab.key}
                 type="button"
                 onClick={() => setActiveTab(tab.key)}
-                className={`shrink-0 px-5 py-3 text-sm font-medium transition-colors ${
+                className={`shrink-0 px-5 py-3 text-sm font-medium transition-colors hover:bg-[var(--color-bg)] ${
                   activeTab === tab.key
                     ? "border-b-2 border-[var(--color-primary)] text-[var(--color-primary)]"
                     : "text-[var(--color-secondary)] hover:text-[var(--color-text)]"
                 }`}
               >
+                <span className="mr-2 inline-flex align-middle">
+                  <tab.icon className="h-4 w-4" />
+                </span>
                 {tab.label}
               </button>
             ))}
@@ -244,6 +347,12 @@ function ClusterDetails() {
 
           {tabLoading && !loadedTabs[activeTab] ? (
             <TableSkeleton rows={6} columns={currentTable.columns.length} />
+          ) : error ? (
+            <EmptyState
+              icon={FiCloudOff}
+              title="Unable to reach cluster"
+              description={`Unable to retrieve ${resourceLabel}. The Kubernetes API server is unavailable. Retry or re-upload kubeconfig.`}
+            />
           ) : (
             <DataTable
               columns={currentTable.columns}

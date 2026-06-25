@@ -72,25 +72,29 @@ def get_cluster_pods(
 
     result = []
 
+    def get_container_reason(container_status):
+        state = container_status.state
+        if state.waiting:
+            return getattr(state.waiting, "reason", None)
+        if state.terminated:
+            return getattr(state.terminated, "reason", None)
+
+        return None
+
     for pod in pods.items:
         status = pod.status.phase
 
         if pod.status.container_statuses:
-            state = (
-                pod.status
-                .container_statuses[0]
-                .state
-            )
+            reasons = [
+                get_container_reason(container_status)
+                for container_status in pod.status.container_statuses
+            ]
+            reasons = [reason for reason in reasons if reason]
 
-            if state.waiting:
-                status = (
-                    state.waiting.reason
-                )
-
-            elif state.terminated:
-                status = (
-                    state.terminated.reason
-                )
+            if "CrashLoopBackOff" in reasons:
+                status = "CrashLoopBackOff"
+            elif reasons:
+                status = reasons[0]
 
         restart_count = 0
 
@@ -203,6 +207,12 @@ def get_cluster_deployments(
             or 0
         )
 
+        status = "Healthy"
+        if available == 0:
+            status = "Critical"
+        elif available < desired:
+            status = "Warning"
+
         result.append({
             "name":
                 deployment.metadata.name,
@@ -211,7 +221,9 @@ def get_cluster_deployments(
             "desired":
                 desired,
             "available":
-                available
+                available,
+            "status":
+                status
         })
 
     return result

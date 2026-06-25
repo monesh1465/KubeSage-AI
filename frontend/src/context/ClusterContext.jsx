@@ -54,7 +54,12 @@ export function ClusterProvider({ children }) {
   const stats = useMemo(() => {
     const connected = clusters.filter((c) => c.status === "connected").length;
     const warning = clusters.filter(
-      (c) => c.status === "failed" || !c.status || c.status === "pending"
+      (c) =>
+        c.status === "failed" ||
+        c.status === "disconnected" ||
+        c.status === "warning" ||
+        !c.status ||
+        c.status === "pending"
     ).length;
 
     return {

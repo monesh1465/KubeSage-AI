@@ -27,7 +27,7 @@ function ToastContainer({ toasts, onDismiss }) {
   if (toasts.length === 0) return null;
 
   return (
-    <div className="pointer-events-none fixed right-4 top-4 z-[100] flex w-full max-w-sm flex-col gap-2">
+    <div className="pointer-events-none fixed bottom-4 right-3 z-[100] flex w-[min(92vw,360px)] flex-col gap-2 md:right-4">
       {toasts.map((toast) => {
         const config = styles[toast.type] || styles.info;
         const Icon = config.icon;

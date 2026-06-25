@@ -44,7 +44,7 @@ function Investigations() {
           {connectedClusters.map((cluster) => (
             <div
               key={cluster.id}
-              className="rounded-lg border border-[var(--color-border)] bg-[var(--color-card)] p-5"
+              className="rounded-2xl border border-[var(--color-border)] bg-[var(--color-card)] p-5 shadow-[var(--shadow-card)]"
             >
               <div className="flex items-start justify-between gap-3">
                 <div className="min-w-0">
@@ -72,7 +72,7 @@ function Investigations() {
       )}
 
       {pendingClusters > 0 && (
-        <div className="rounded-lg border border-[var(--color-border)] bg-[var(--color-card)] px-5 py-4 text-sm text-[var(--color-secondary)]">
+        <div className="rounded-2xl border border-[var(--color-border)] bg-[var(--color-card)] px-5 py-4 text-sm text-[var(--color-secondary)] shadow-[var(--shadow-card)]">
           {pendingClusters} cluster(s) still need kubeconfig upload.{" "}
           <Link to="/clusters" className="text-[var(--color-primary)] hover:underline">
             Complete setup

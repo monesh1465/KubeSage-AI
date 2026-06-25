@@ -1,17 +1,24 @@
 import { Link } from "react-router-dom";
-import { FiSearch, FiEye, FiUpload } from "react-icons/fi";
+import { FiSearch, FiEye, FiUpload, FiTrash2, FiServer } from "react-icons/fi";
 import StatusBadge from "./StatusBadge";
 import LoadingSpinner from "./LoadingSpinner";
 
-function ClusterCard({ cluster, onUploadKubeconfig, uploading = false }) {
+function ClusterCard({
+  cluster,
+  onUploadKubeconfig,
+  onRemoveCluster,
+  uploading = false,
+  removing = false,
+}) {
   const isConnected = cluster.status === "connected";
-  const isFailed = cluster.status === "failed";
+  const isDisconnected = cluster.status === "failed" || cluster.status === "disconnected";
 
   return (
-    <div className="rounded-lg border border-[var(--color-border)] bg-[var(--color-card)] p-5">
+    <div className="group rounded-2xl border border-[var(--color-border)] bg-[var(--color-card)] p-5 shadow-[var(--shadow-card)] transition-all duration-200 hover:-translate-y-1 hover:shadow-[0_20px_50px_rgba(0,0,0,0.16)]">
       <div className="mb-3 flex items-start justify-between gap-3">
         <div className="min-w-0">
-          <h3 className="truncate text-lg font-semibold text-[var(--color-text)]">
+          <h3 className="flex items-center gap-2 truncate text-lg font-bold text-[var(--color-text)]">
+            <FiServer className="h-4.5 w-4.5 text-[var(--color-primary)]" />
             {cluster.name}
           </h3>
           <p className="mt-1 line-clamp-2 text-sm text-[var(--color-secondary)]">
@@ -27,14 +34,14 @@ function ClusterCard({ cluster, onUploadKubeconfig, uploading = false }) {
             Connected
           </span>
         )}
-        {isFailed && (
+        {isDisconnected && (
           <span className="rounded-md bg-[var(--color-danger)]/10 px-2 py-1 text-xs font-medium text-[var(--color-danger)]">
-            Connection Failed
+            Disconnected
           </span>
         )}
-        {!isConnected && !isFailed && (
+        {!isConnected && !isDisconnected && (
           <span className="rounded-md bg-[var(--color-warning)]/10 px-2 py-1 text-xs font-medium text-[var(--color-warning)]">
-            Pending Setup
+            Connecting
           </span>
         )}
       </div>
@@ -42,7 +49,7 @@ function ClusterCard({ cluster, onUploadKubeconfig, uploading = false }) {
       <div className="flex flex-wrap gap-2">
         <Link
           to={`/clusters/${cluster.id}`}
-          className="inline-flex items-center gap-1.5 rounded-lg border border-[var(--color-border)] px-3 py-2 text-sm text-[var(--color-text)] transition-colors hover:bg-[var(--color-bg)]"
+          className="inline-flex items-center gap-1.5 rounded-lg border border-[var(--color-border)] px-3 py-2 text-sm text-[var(--color-text)] transition-colors hover:bg-[var(--color-bg)] hover:shadow-sm"
         >
           <FiEye className="h-4 w-4" />
           View
@@ -88,6 +95,15 @@ function ClusterCard({ cluster, onUploadKubeconfig, uploading = false }) {
             }}
           />
         </label>
+        <button
+          type="button"
+          disabled={removing || uploading}
+          onClick={() => onRemoveCluster(cluster)}
+          className="inline-flex items-center gap-1.5 rounded-lg border border-[var(--color-danger)]/35 px-3 py-2 text-sm text-[var(--color-danger)] transition-colors hover:bg-[var(--color-danger)]/10 disabled:opacity-50"
+        >
+          <FiTrash2 className="h-4 w-4" />
+          {removing ? "Removing..." : "Remove"}
+        </button>
       </div>
     </div>
   );

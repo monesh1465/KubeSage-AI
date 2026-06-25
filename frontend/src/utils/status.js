@@ -9,7 +9,13 @@ export function isHealthyStatus(status) {
 
 export function isWarningStatus(status) {
   const value = normalizeStatus(status);
-  return value === "warning" || value === "failed" || value === "notready";
+  return (
+    value === "warning" ||
+    value === "failed" ||
+    value === "notready" ||
+    value === "connecting" ||
+    value === "pending"
+  );
 }
 
 export function formatDateTime(value) {

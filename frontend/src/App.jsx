@@ -14,7 +14,6 @@ const ClusterDetails = lazy(() => import("./pages/ClusterDetails"));
 const Investigation = lazy(() => import("./pages/Investigation"));
 const Investigations = lazy(() => import("./pages/Investigations"));
 const History = lazy(() => import("./pages/History"));
-const Assistant = lazy(() => import("./pages/Assistant"));
 const Settings = lazy(() => import("./pages/Settings"));
 
 function PageLoader() {
@@ -95,14 +94,6 @@ function App() {
               element={
                 <Suspense fallback={<PageLoader />}>
                   <History />
-                </Suspense>
-              }
-            />
-            <Route
-              path="/assistant"
-              element={
-                <Suspense fallback={<PageLoader />}>
-                  <Assistant />
                 </Suspense>
               }
             />

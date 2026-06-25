@@ -10,6 +10,11 @@ export const createCluster = async (clusterData) => {
   return response.data;
 };
 
+export const deleteCluster = async (clusterId) => {
+  const response = await api.delete(`/clusters/${clusterId}`);
+  return response.data;
+};
+
 export const uploadKubeconfig = async (clusterId, file) => {
   const formData = new FormData();
   formData.append("file", file);
@@ -38,5 +43,10 @@ export const getNamespaces = async (clusterId) => {
 
 export const getEvents = async (clusterId) => {
   const response = await api.get(`/clusters/${clusterId}/events`);
+  return response.data;
+};
+
+export const getDeployments = async (clusterId) => {
+  const response = await api.get(`/clusters/${clusterId}/deployments`);
   return response.data;
 };

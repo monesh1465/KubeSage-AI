@@ -3,33 +3,39 @@
 @custom-variant dark (&:where(.dark, .dark *));
 
 @theme {
-  --font-sans: "Inter", system-ui, sans-serif;
+  --font-sans: "Manrope", "Segoe UI", system-ui, sans-serif;
 }
 
 :root {
-  --color-bg: #f8fafc;
-  --color-sidebar: #ffffff;
+  --color-bg: #eef2f6;
+  --color-bg-soft: #f8fafc;
+  --color-sidebar: #fbfdff;
   --color-card: #ffffff;
-  --color-primary: #2563eb;
-  --color-text: #0f172a;
-  --color-secondary: #475569;
-  --color-success: #059669;
-  --color-warning: #d97706;
-  --color-danger: #dc2626;
-  --color-border: #cbd5e1;
+  --color-primary: #0f5d9b;
+  --color-text: #102234;
+  --color-secondary: #4f6377;
+  --color-success: #0f9d75;
+  --color-warning: #d08a00;
+  --color-danger: #d3452f;
+  --color-border: #d8e2ec;
+  --color-ring: #77b8ea;
+  --shadow-card: 0 10px 30px rgba(9, 30, 66, 0.07);
 }
 
 .dark {
-  --color-bg: #0f172a;
-  --color-sidebar: #111827;
-  --color-card: #1e293b;
-  --color-primary: #3b82f6;
-  --color-text: #f8fafc;
-  --color-secondary: #94a3b8;
-  --color-success: #10b981;
-  --color-warning: #f59e0b;
-  --color-danger: #ef4444;
-  --color-border: #334155;
+  --color-bg: #0f1924;
+  --color-bg-soft: #111d2a;
+  --color-sidebar: #101c29;
+  --color-card: #162434;
+  --color-primary: #4fa3dc;
+  --color-text: #e7edf5;
+  --color-secondary: #9fb1c3;
+  --color-success: #29b58f;
+  --color-warning: #e9b636;
+  --color-danger: #ff6a54;
+  --color-border: #26384a;
+  --color-ring: #4fa3dc;
+  --shadow-card: 0 14px 30px rgba(0, 0, 0, 0.28);
 }
 
 * {
@@ -44,6 +50,9 @@ body {
   margin: 0;
   min-height: 100vh;
   background-color: var(--color-bg);
+  background-image:
+    radial-gradient(circle at 8% -6%, color-mix(in srgb, var(--color-primary) 18%, transparent) 0%, transparent 45%),
+    radial-gradient(circle at 94% 6%, color-mix(in srgb, var(--color-success) 14%, transparent) 0%, transparent 40%);
   color: var(--color-text);
   font-family: var(--font-sans);
   -webkit-font-smoothing: antialiased;
@@ -63,6 +72,33 @@ a {
 input:disabled,
 button:disabled {
   cursor: not-allowed;
+}
+
+input:focus-visible,
+textarea:focus-visible,
+select:focus-visible,
+button:focus-visible,
+a:focus-visible {
+  outline: 2px solid var(--color-ring);
+  outline-offset: 1px;
+}
+
+::-webkit-scrollbar {
+  width: 10px;
+  height: 10px;
+}
+
+::-webkit-scrollbar-track {
+  background: transparent;
+}
+
+::-webkit-scrollbar-thumb {
+  background: color-mix(in srgb, var(--color-secondary) 35%, transparent);
+  border-radius: 999px;
+}
+
+::-webkit-scrollbar-thumb:hover {
+  background: color-mix(in srgb, var(--color-secondary) 50%, transparent);
 }
 
 .line-clamp-2 {

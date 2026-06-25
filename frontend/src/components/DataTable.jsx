@@ -6,6 +6,7 @@ function DataTable({
   columns,
   rows,
   emptyMessage = "No data found",
+  emptyDescription = "Try refreshing or check cluster connectivity.",
   emptyIcon,
   searchable = true,
   searchPlaceholder = "Search...",
@@ -55,7 +56,7 @@ function DataTable({
       <EmptyState
         icon={emptyIcon}
         title={emptyMessage}
-        description="Try refreshing or check cluster connectivity."
+        description={emptyDescription}
       />
     );
   }
@@ -78,13 +79,13 @@ function DataTable({
       )}
 
       <div className="overflow-x-auto">
-        <table className="w-full min-w-[640px] text-left text-sm">
+        <table className="w-full min-w-[560px] text-left text-sm md:min-w-[640px]">
           <thead className={stickyHeader ? "sticky top-0 z-10" : ""}>
             <tr className="border-b border-[var(--color-border)] bg-[var(--color-bg)]">
               {columns.map((col) => (
                 <th
                   key={col.key}
-                  className="px-5 py-3 font-medium text-[var(--color-secondary)]"
+                  className="px-3 py-3 font-medium text-[var(--color-secondary)] md:px-5"
                 >
                   {col.sortable === false ? (
                     col.label
@@ -111,7 +112,7 @@ function DataTable({
               <tr>
                 <td
                   colSpan={columns.length}
-                  className="px-5 py-8 text-center text-sm text-[var(--color-secondary)]"
+                  className="px-3 py-8 text-center text-sm text-[var(--color-secondary)] md:px-5"
                 >
                   No results match your search.
                 </td>
@@ -120,7 +121,7 @@ function DataTable({
               filteredRows.map((row, idx) => (
                 <tr key={row.id ?? idx} className="hover:bg-[var(--color-bg)]/50">
                   {columns.map((col) => (
-                    <td key={col.key} className="px-5 py-3 text-[var(--color-text)]">
+                    <td key={col.key} className="px-3 py-3 text-[var(--color-text)] md:px-5">
                       {col.render ? col.render(row) : row[col.key]}
                     </td>
                   ))}

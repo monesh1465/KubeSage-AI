@@ -4,9 +4,9 @@ import {
   FiServer,
   FiSearch,
   FiClock,
-  FiMessageSquare,
   FiSettings,
   FiLogOut,
+  FiX,
 } from "react-icons/fi";
 import { useAuth } from "../context/AuthContext";
 
@@ -15,30 +15,46 @@ const navItems = [
   { to: "/clusters", label: "Clusters", icon: FiServer },
   { to: "/investigations", label: "Investigations", icon: FiSearch },
   { to: "/history", label: "History", icon: FiClock },
-  { to: "/assistant", label: "AI Assistant", icon: FiMessageSquare },
   { to: "/settings", label: "Settings", icon: FiSettings },
 ];
 
-function Sidebar() {
+function Sidebar({ open, onClose }) {
   const navigate = useNavigate();
   const { logout } = useAuth();
 
   const handleLogout = () => {
     logout();
     navigate("/");
+    onClose?.();
   };
 
   return (
-    <aside className="flex w-56 shrink-0 flex-col border-r border-[var(--color-border)] bg-[var(--color-sidebar)]">
+    <aside
+      className={`fixed inset-y-16 left-0 z-30 flex w-72 shrink-0 flex-col border-r border-[var(--color-border)] bg-[var(--color-sidebar)] shadow-xl transition-transform duration-300 lg:static lg:inset-auto lg:z-0 lg:w-60 lg:translate-x-0 lg:shadow-none ${
+        open ? "translate-x-0" : "-translate-x-full"
+      }`}
+    >
+      <div className="flex items-center justify-between border-b border-[var(--color-border)] px-3 py-2 lg:hidden">
+        <p className="text-sm font-medium text-[var(--color-text)]">Navigation</p>
+        <button
+          type="button"
+          onClick={onClose}
+          className="inline-flex h-8 w-8 items-center justify-center rounded-md border border-[var(--color-border)]"
+          aria-label="Close menu"
+        >
+          <FiX className="h-4 w-4" />
+        </button>
+      </div>
       <nav className="flex-1 space-y-1 p-3">
         {navItems.map(({ to, label, icon: Icon }) => (
           <NavLink
             key={to}
             to={to}
+            onClick={onClose}
             className={({ isActive }) =>
-              `flex items-center gap-3 rounded-lg px-3 py-2.5 text-sm font-medium transition-colors ${
+              `flex items-center gap-3 rounded-xl px-3 py-2.5 text-sm font-medium transition-colors ${
                 isActive
-                  ? "bg-[var(--color-primary)]/10 text-[var(--color-primary)]"
+                  ? "bg-[var(--color-primary)]/12 text-[var(--color-primary)]"
                   : "text-[var(--color-secondary)] hover:bg-[var(--color-bg)] hover:text-[var(--color-text)]"
               }`
             }
@@ -53,7 +69,7 @@ function Sidebar() {
         <button
           type="button"
           onClick={handleLogout}
-          className="flex w-full items-center gap-3 rounded-lg px-3 py-2.5 text-sm font-medium text-[var(--color-danger)] transition-colors hover:bg-[var(--color-danger)]/10"
+          className="flex w-full items-center gap-3 rounded-xl px-3 py-2.5 text-sm font-medium text-[var(--color-danger)] transition-colors hover:bg-[var(--color-danger)]/10"
         >
           <FiLogOut className="h-4 w-4" />
           Logout

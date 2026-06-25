@@ -1,4 +1,5 @@
 from pydantic import BaseModel
+from datetime import datetime
 
 
 class IssueResponse(BaseModel):
@@ -13,3 +14,6 @@ class InvestigationResponse(BaseModel):
     cluster_status: str
     issues: list[IssueResponse]
     summary: str
+    started_at: datetime | None = None
+    completed_at: datetime | None = None
+    duration_seconds: float | None = None
