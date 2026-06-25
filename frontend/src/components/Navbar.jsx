@@ -21,7 +21,7 @@ function Navbar({ onToggleSidebar }) {
             <FiActivity className="h-4.5 w-4.5 animate-pulse" />
           </div>
           <span className="text-sm font-bold tracking-tight text-[var(--color-text)] lg:text-base">
-            KubeSage<span className="font-light text-[var(--color-primary)]">.ai</span>
+            KubeSage<span className="font-black text-[var(--color-primary)]">.AI</span>
           </span>
         </div>
       </div>

@@ -27,7 +27,7 @@ function ToastContainer({ toasts, onDismiss }) {
   if (toasts.length === 0) return null;
 
   return (
-    <div className="pointer-events-none fixed bottom-4 right-3 z-[100] flex w-[min(92vw,360px)] flex-col gap-2 md:right-4">
+    <div className="pointer-events-none fixed top-4 left-1/2 -translate-x-1/2 z-[9999] flex w-[min(92vw,400px)] flex-col gap-2">
       {toasts.map((toast) => {
         const config = styles[toast.type] || styles.info;
         const Icon = config.icon;
@@ -35,7 +35,7 @@ function ToastContainer({ toasts, onDismiss }) {
         return (
           <div
             key={toast.id}
-            className={`pointer-events-auto flex items-start gap-3 rounded-lg border px-4 py-3 text-sm shadow-lg ${config.className}`}
+            className={`pointer-events-auto flex items-center gap-3 rounded-xl border px-4 py-3 text-sm shadow-xl backdrop-blur-sm ${config.className}`}
             role="alert"
           >
             <Icon className="mt-0.5 h-4 w-4 shrink-0" />

@@ -1,11 +1,28 @@
 import { useState } from "react";
 import { useNavigate, Link } from "react-router-dom";
-import { FiActivity } from "react-icons/fi";
+import {
+  FiUser,
+  FiMail,
+  FiLock,
+  FiServer,
+  FiShield,
+  FiAlertTriangle,
+  FiZap,
+  FiArrowRight,
+  FiActivity,
+  FiCheckCircle,
+} from "react-icons/fi";
 import { registerUser } from "../services/authService";
 import { useToast } from "../context/ToastContext";
 import LoadingSpinner from "../components/LoadingSpinner";
 import ErrorAlert from "../components/ErrorAlert";
 import { getApiErrorMessage } from "../utils/errors";
+
+const TRUST_ITEMS = [
+  { icon: FiCheckCircle, label: "Multi-cluster Observability" },
+  { icon: FiCheckCircle, label: "AI-Powered Root Cause Analysis" },
+  { icon: FiCheckCircle, label: "Real-time Incident Detection" },
+];
 
 function Register() {
   const navigate = useNavigate();
@@ -21,15 +38,12 @@ function Register() {
 
   const handleSubmit = async (e) => {
     e.preventDefault();
-
     if (formData.password.length < 6) {
       setError("Password must be at least 6 characters.");
       return;
     }
-
     setLoading(true);
     setError("");
-
     try {
       await registerUser(formData);
       toast.success("Account created. Please sign in.");
@@ -42,91 +56,228 @@ function Register() {
   };
 
   return (
-    <div className="relative flex min-h-screen items-center justify-center bg-[var(--color-bg)] px-4">
-      {/* Background Graphic Grid */}
-      <div className="absolute inset-0 z-0 bg-[linear-gradient(to_right,#e4e4e7_1px,transparent_1px),linear-gradient(to_bottom,#e4e4e7_1px,transparent_1px)] dark:bg-[linear-gradient(to_right,#27272a_1px,transparent_1px),linear-gradient(to_bottom,#27272a_1px,transparent_1px)] bg-[size:4rem_4rem] [mask-image:radial-gradient(ellipse_60%_50%_at_50%_50%,#000_70%,transparent_100%)] opacity-35" />
+    <div className="login-root">
+      {/* ═══════════════════════════════════════════
+          LEFT — Brand Hero Panel
+      ═══════════════════════════════════════════ */}
+      <div className="login-hero">
+        <div className="hero-orb hero-orb--1" />
+        <div className="hero-orb hero-orb--2" />
+        <div className="hero-orb hero-orb--3" />
+        <div className="hero-grid" />
 
-      <div className="relative z-10 w-full max-w-sm rounded-xl border border-[var(--color-border)] bg-[var(--color-card)] p-8 shadow-premium">
-        <div className="mb-6 text-center">
-          <div className="mx-auto mb-4 flex h-10 w-10 items-center justify-center rounded-lg bg-[var(--color-primary)] text-white shadow-sm">
-            <FiActivity className="h-5 w-5" />
+        <div className="hero-content">
+          <div className="hero-wordmark">
+            <div className="hero-logo-badge">
+              <FiActivity className="hero-logo-icon" />
+            </div>
+            <span className="hero-logo-text">
+              KubeSage<span className="hero-logo-ai">.AI</span>
+            </span>
           </div>
-          <h1 className="text-xl font-bold tracking-tight text-[var(--color-text)]">
-            Create Account
+
+          <h1 className="hero-headline">
+            Kubernetes Intelligence,{" "}
+            <span className="hero-headline--accent">Redefined.</span>
           </h1>
-          <p className="mt-1.5 text-xs text-[var(--color-secondary)]">
-            Get started with KubeSage AI platform
+
+          <p className="hero-sub">
+            Connect your clusters, detect incidents in real time, and let AI
+            resolve production issues before they escalate.
           </p>
+
+          <ul className="hero-trust-list">
+            {TRUST_ITEMS.map(({ icon: Icon, label }) => (
+              <li key={label} className="hero-trust-item">
+                <Icon className="hero-trust-icon" />
+                <span>{label}</span>
+              </li>
+            ))}
+          </ul>
+
+          {/* Simulated telemetry card */}
+          <div className="telemetry-card">
+            <div className="telemetry-header">
+              <div className="telemetry-header-left">
+                <FiServer className="telemetry-icon" />
+                <span className="telemetry-cluster">eks-prod-us-east-1</span>
+              </div>
+              <div className="telemetry-live-badge">
+                <span className="telemetry-live-dot" />
+                <span>LIVE</span>
+              </div>
+            </div>
+
+            <div className="telemetry-stats">
+              {[
+                { label: "Nodes", value: "4 / 4" },
+                { label: "Pods", value: "128" },
+                { label: "Namespaces", value: "8" },
+              ].map(({ label, value }) => (
+                <div key={label} className="telemetry-stat">
+                  <p className="telemetry-stat-label">{label}</p>
+                  <p className="telemetry-stat-value">{value}</p>
+                </div>
+              ))}
+            </div>
+
+            <div className="telemetry-alert">
+              <div className="telemetry-alert-header">
+                <FiAlertTriangle className="telemetry-alert-icon" />
+                <span>CrashLoopBackOff · payment-gateway-c5b9</span>
+              </div>
+              <div className="telemetry-ai-box">
+                <div className="telemetry-ai-label">
+                  <FiZap className="telemetry-ai-zap" />
+                  AI Recommendation
+                </div>
+                <p className="telemetry-ai-text">
+                  Raise memory limit to{" "}
+                  <code className="telemetry-code">512Mi</code> and restart
+                  the deployment in <em>billing</em>.
+                </p>
+              </div>
+            </div>
+
+            <div className="telemetry-nodes">
+              <span className="telemetry-nodes-label">Node Health</span>
+              <div className="telemetry-nodes-bars">
+                <div className="node-bar node-bar--ok" />
+                <div className="node-bar node-bar--ok" />
+                <div className="node-bar node-bar--ok" />
+                <div className="node-bar node-bar--warn" />
+              </div>
+            </div>
+          </div>
+        </div>
+      </div>
+
+      {/* ═══════════════════════════════════════════
+          RIGHT — Register Form Panel
+      ═══════════════════════════════════════════ */}
+      <div className="login-form-panel">
+        {/* Mobile-only wordmark */}
+        <div className="mobile-wordmark">
+          <div className="hero-logo-badge hero-logo-badge--sm">
+            <FiActivity className="hero-logo-icon" />
+          </div>
+          <span className="hero-logo-text">
+            KubeSage<span className="hero-logo-ai">.AI</span>
+          </span>
         </div>
 
-        <ErrorAlert message={error} className="mb-4" />
+        <div className="form-card">
+          <div className="form-card-inner">
+            <div className="form-heading">
+              <h2 className="form-title">Create your account</h2>
+              <p className="form-subtitle">
+                Start managing your clusters in minutes.
+              </p>
+            </div>
 
-        <form onSubmit={handleSubmit} className="space-y-4">
-          <div>
-            <label className="mb-1 block text-[10px] font-bold uppercase tracking-wider text-[var(--color-text)]">
-              Full Name
-            </label>
-            <input
-              type="text"
-              name="name"
-              required
-              minLength={2}
-              autoComplete="name"
-              value={formData.name}
-              onChange={handleChange}
-              placeholder="John Doe"
-              className="w-full rounded-lg border border-[var(--color-border)] bg-[var(--color-bg)] px-3 py-2 text-xs text-[var(--color-text)] outline-none transition-colors placeholder:text-zinc-400 dark:placeholder:text-zinc-500 focus:border-[var(--color-primary)] focus:bg-[var(--color-card)]"
-            />
+            <ErrorAlert message={error} className="mb-4" />
+
+            <form onSubmit={handleSubmit} className="auth-form">
+              {/* name */}
+              <div className="field-group">
+                <label className="field-label" htmlFor="reg-name">
+                  Full Name
+                </label>
+                <div className="field-wrapper">
+                  <FiUser className="field-icon" />
+                  <input
+                    id="reg-name"
+                    type="text"
+                    name="name"
+                    required
+                    minLength={2}
+                    autoComplete="name"
+                    value={formData.name}
+                    onChange={handleChange}
+                    placeholder="John Doe"
+                    className="field-input"
+                  />
+                </div>
+              </div>
+
+              {/* email */}
+              <div className="field-group">
+                <label className="field-label" htmlFor="reg-email">
+                  Email Address
+                </label>
+                <div className="field-wrapper">
+                  <FiMail className="field-icon" />
+                  <input
+                    id="reg-email"
+                    type="email"
+                    name="email"
+                    required
+                    autoComplete="email"
+                    value={formData.email}
+                    onChange={handleChange}
+                    placeholder="name@company.com"
+                    className="field-input"
+                  />
+                </div>
+              </div>
+
+              {/* password */}
+              <div className="field-group">
+                <label className="field-label" htmlFor="reg-password">
+                  Password
+                </label>
+                <div className="field-wrapper">
+                  <FiLock className="field-icon" />
+                  <input
+                    id="reg-password"
+                    type="password"
+                    name="password"
+                    required
+                    minLength={6}
+                    autoComplete="new-password"
+                    value={formData.password}
+                    onChange={handleChange}
+                    placeholder="Min. 6 characters"
+                    className="field-input"
+                  />
+                </div>
+              </div>
+
+              <button
+                type="submit"
+                disabled={loading}
+                className="btn-primary-full"
+              >
+                {loading ? (
+                  <LoadingSpinner size="sm" />
+                ) : (
+                  <>
+                    Create Account
+                    <FiArrowRight className="btn-arrow" />
+                  </>
+                )}
+              </button>
+            </form>
+
+            <div className="form-divider">
+              <span className="form-divider-line" />
+              <span className="form-divider-text">or</span>
+              <span className="form-divider-line" />
+            </div>
+
+            <p className="form-footer">
+              Already have an account?{" "}
+              <Link to="/" className="form-footer-link">
+                Sign in
+              </Link>
+            </p>
+
+            <p className="form-security-note">
+              <FiShield className="form-security-icon" />
+              Encrypted &amp; Secure · No card required
+            </p>
           </div>
-
-          <div>
-            <label className="mb-1 block text-[10px] font-bold uppercase tracking-wider text-[var(--color-text)]">
-              Email Address
-            </label>
-            <input
-              type="email"
-              name="email"
-              required
-              autoComplete="email"
-              value={formData.email}
-              onChange={handleChange}
-              placeholder="name@company.com"
-              className="w-full rounded-lg border border-[var(--color-border)] bg-[var(--color-bg)] px-3 py-2 text-xs text-[var(--color-text)] outline-none transition-colors placeholder:text-zinc-400 dark:placeholder:text-zinc-500 focus:border-[var(--color-primary)] focus:bg-[var(--color-card)]"
-            />
-          </div>
-
-          <div>
-            <label className="mb-1 block text-[10px] font-bold uppercase tracking-wider text-[var(--color-text)]">
-              Password
-            </label>
-            <input
-              type="password"
-              name="password"
-              required
-              minLength={6}
-              autoComplete="new-password"
-              value={formData.password}
-              onChange={handleChange}
-              placeholder="••••••••"
-              className="w-full rounded-lg border border-[var(--color-border)] bg-[var(--color-bg)] px-3 py-2 text-xs text-[var(--color-text)] outline-none transition-colors placeholder:text-zinc-400 dark:placeholder:text-zinc-500 focus:border-[var(--color-primary)] focus:bg-[var(--color-card)]"
-            />
-          </div>
-
-          <button
-            type="submit"
-            disabled={loading}
-            className="flex w-full items-center justify-center gap-2 rounded-lg bg-[var(--color-primary)] px-4 py-2 text-xs font-semibold text-white transition-opacity hover:opacity-90 disabled:opacity-60"
-          >
-            {loading ? <LoadingSpinner size="sm" /> : "Create Account"}
-          </button>
-        </form>
-
-        <p className="mt-6 text-center text-xs text-[var(--color-secondary)]">
-          Already have an account?{" "}
-          <Link to="/" className="font-semibold text-[var(--color-primary)] hover:underline">
-            Sign In
-          </Link>
-        </p>
+        </div>
       </div>
     </div>
   );

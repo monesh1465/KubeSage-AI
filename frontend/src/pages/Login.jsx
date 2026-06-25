@@ -1,12 +1,29 @@
 import { useState } from "react";
 import { useNavigate, Link } from "react-router-dom";
-import { FiActivity } from "react-icons/fi";
+import {
+  FiMail,
+  FiLock,
+  FiServer,
+  FiShield,
+  FiAlertTriangle,
+  FiZap,
+  FiArrowRight,
+  FiActivity,
+  FiCheckCircle,
+} from "react-icons/fi";
 import { loginUser } from "../services/authService";
 import { useAuth } from "../context/AuthContext";
 import { useToast } from "../context/ToastContext";
 import LoadingSpinner from "../components/LoadingSpinner";
 import ErrorAlert from "../components/ErrorAlert";
 import { getApiErrorMessage } from "../utils/errors";
+
+/* ─────────────── tiny static trust-badge list ─────────────── */
+const TRUST_ITEMS = [
+  { icon: FiCheckCircle, label: "Multi-cluster Observability" },
+  { icon: FiCheckCircle, label: "AI-Powered Root Cause Analysis" },
+  { icon: FiCheckCircle, label: "Real-time Incident Detection" },
+];
 
 function Login() {
   const navigate = useNavigate();
@@ -25,7 +42,6 @@ function Login() {
     e.preventDefault();
     setLoading(true);
     setError("");
-
     try {
       const data = await loginUser(formData);
       localStorage.setItem("token", data.access_token);
@@ -40,73 +56,213 @@ function Login() {
   };
 
   return (
-    <div className="relative flex min-h-screen items-center justify-center bg-[var(--color-bg)] px-4">
-      {/* Background Graphic Grid */}
-      <div className="absolute inset-0 z-0 bg-[linear-gradient(to_right,#e4e4e7_1px,transparent_1px),linear-gradient(to_bottom,#e4e4e7_1px,transparent_1px)] dark:bg-[linear-gradient(to_right,#27272a_1px,transparent_1px),linear-gradient(to_bottom,#27272a_1px,transparent_1px)] bg-[size:4rem_4rem] [mask-image:radial-gradient(ellipse_60%_50%_at_50%_50%,#000_70%,transparent_100%)] opacity-35" />
+    <div className="login-root">
+      {/* ═══════════════════════════════════════════
+          LEFT — Brand Hero Panel
+      ═══════════════════════════════════════════ */}
+      <div className="login-hero">
+        {/* ambient glow orbs */}
+        <div className="hero-orb hero-orb--1" />
+        <div className="hero-orb hero-orb--2" />
+        <div className="hero-orb hero-orb--3" />
 
-      <div className="relative z-10 w-full max-w-sm rounded-xl border border-[var(--color-border)] bg-[var(--color-card)] p-8 shadow-premium">
-        <div className="mb-6 text-center">
-          <div className="mx-auto mb-4 flex h-10 w-10 items-center justify-center rounded-lg bg-[var(--color-primary)] text-white shadow-sm">
-            <FiActivity className="h-5 w-5" />
+        {/* dot-grid overlay */}
+        <div className="hero-grid" />
+
+        <div className="hero-content">
+          {/* wordmark */}
+          <div className="hero-wordmark">
+            <div className="hero-logo-badge">
+              <FiActivity className="hero-logo-icon" />
+            </div>
+            <span className="hero-logo-text">
+              KubeSage<span className="hero-logo-ai">.AI</span>
+            </span>
           </div>
-          <h1 className="text-xl font-bold tracking-tight text-[var(--color-text)]">
-            Welcome to KubeSage<span className="font-light text-[var(--color-primary)]">.ai</span>
+
+          {/* headline */}
+          <h1 className="hero-headline">
+            Kubernetes Intelligence,{" "}
+            <span className="hero-headline--accent">Redefined.</span>
           </h1>
-          <p className="mt-1.5 text-xs text-[var(--color-secondary)]">
-            DevOps & SRE Kubernetes observability layer
+
+          <p className="hero-sub">
+            Connect your clusters, detect incidents in real time, and let AI
+            resolve production issues before they escalate.
           </p>
+
+          {/* trust badges */}
+          <ul className="hero-trust-list">
+            {TRUST_ITEMS.map(({ icon: Icon, label }) => (
+              <li key={label} className="hero-trust-item">
+                <Icon className="hero-trust-icon" />
+                <span>{label}</span>
+              </li>
+            ))}
+          </ul>
+
+          {/* simulated telemetry card */}
+          <div className="telemetry-card">
+            <div className="telemetry-header">
+              <div className="telemetry-header-left">
+                <FiServer className="telemetry-icon" />
+                <span className="telemetry-cluster">eks-prod-us-east-1</span>
+              </div>
+              <div className="telemetry-live-badge">
+                <span className="telemetry-live-dot" />
+                <span>LIVE</span>
+              </div>
+            </div>
+
+            <div className="telemetry-stats">
+              {[
+                { label: "Nodes", value: "4 / 4" },
+                { label: "Pods", value: "128" },
+                { label: "Namespaces", value: "8" },
+              ].map(({ label, value }) => (
+                <div key={label} className="telemetry-stat">
+                  <p className="telemetry-stat-label">{label}</p>
+                  <p className="telemetry-stat-value">{value}</p>
+                </div>
+              ))}
+            </div>
+
+            <div className="telemetry-alert">
+              <div className="telemetry-alert-header">
+                <FiAlertTriangle className="telemetry-alert-icon" />
+                <span>CrashLoopBackOff · payment-gateway-c5b9</span>
+              </div>
+              <div className="telemetry-ai-box">
+                <div className="telemetry-ai-label">
+                  <FiZap className="telemetry-ai-zap" />
+                  AI Recommendation
+                </div>
+                <p className="telemetry-ai-text">
+                  Raise memory limit to{" "}
+                  <code className="telemetry-code">512Mi</code> and restart
+                  the deployment in <em>billing</em>.
+                </p>
+              </div>
+            </div>
+
+            <div className="telemetry-nodes">
+              <span className="telemetry-nodes-label">Node Health</span>
+              <div className="telemetry-nodes-bars">
+                <div className="node-bar node-bar--ok" />
+                <div className="node-bar node-bar--ok" />
+                <div className="node-bar node-bar--ok" />
+                <div className="node-bar node-bar--warn" />
+              </div>
+            </div>
+          </div>
+        </div>
+      </div>
+
+      {/* ═══════════════════════════════════════════
+          RIGHT — Auth Form Panel
+      ═══════════════════════════════════════════ */}
+      <div className="login-form-panel">
+        {/* mobile-only wordmark */}
+        <div className="mobile-wordmark">
+          <div className="hero-logo-badge hero-logo-badge--sm">
+            <FiActivity className="hero-logo-icon" />
+          </div>
+          <span className="hero-logo-text">
+            KubeSage<span className="hero-logo-ai">.AI</span>
+          </span>
         </div>
 
-        <ErrorAlert message={error} className="mb-4" />
+        <div className="form-card">
+          <div className="form-card-inner">
+            {/* heading */}
+            <div className="form-heading">
+              <h2 className="form-title">Welcome back</h2>
+              <p className="form-subtitle">
+                Sign in to your account to continue.
+              </p>
+            </div>
 
-        <form onSubmit={handleSubmit} className="space-y-4">
-          <div>
-            <label className="mb-1 block text-[10px] font-bold uppercase tracking-wider text-[var(--color-text)]">
-              Email Address
-            </label>
-            <input
-              type="email"
-              name="email"
-              required
-              autoComplete="email"
-              value={formData.email}
-              onChange={handleChange}
-              placeholder="name@company.com"
-              className="w-full rounded-lg border border-[var(--color-border)] bg-[var(--color-bg)] px-3 py-2 text-xs text-[var(--color-text)] outline-none transition-colors placeholder:text-zinc-400 dark:placeholder:text-zinc-500 focus:border-[var(--color-primary)] focus:bg-[var(--color-card)]"
-            />
+            <ErrorAlert message={error} className="mb-4" />
+
+            <form onSubmit={handleSubmit} className="auth-form">
+              {/* email */}
+              <div className="field-group">
+                <label className="field-label" htmlFor="login-email">
+                  Email Address
+                </label>
+                <div className="field-wrapper">
+                  <FiMail className="field-icon" />
+                  <input
+                    id="login-email"
+                    type="email"
+                    name="email"
+                    required
+                    autoComplete="email"
+                    value={formData.email}
+                    onChange={handleChange}
+                    placeholder="name@company.com"
+                    className="field-input"
+                  />
+                </div>
+              </div>
+
+              {/* password */}
+              <div className="field-group">
+                <label className="field-label" htmlFor="login-password">
+                  Password
+                </label>
+                <div className="field-wrapper">
+                  <FiLock className="field-icon" />
+                  <input
+                    id="login-password"
+                    type="password"
+                    name="password"
+                    required
+                    autoComplete="current-password"
+                    value={formData.password}
+                    onChange={handleChange}
+                    placeholder="••••••••"
+                    className="field-input"
+                  />
+                </div>
+              </div>
+
+              <button
+                type="submit"
+                disabled={loading}
+                className="btn-primary-full"
+              >
+                {loading ? (
+                  <LoadingSpinner size="sm" />
+                ) : (
+                  <>
+                    Sign In
+                    <FiArrowRight className="btn-arrow" />
+                  </>
+                )}
+              </button>
+            </form>
+
+            <div className="form-divider">
+              <span className="form-divider-line" />
+              <span className="form-divider-text">or</span>
+              <span className="form-divider-line" />
+            </div>
+
+            <p className="form-footer">
+              Don&apos;t have an account?{" "}
+              <Link to="/register" className="form-footer-link">
+                Create one for free
+              </Link>
+            </p>
+
+            {/* security note */}
+            <p className="form-security-note">
+              <FiShield className="form-security-icon" />
+              Encrypted &amp; Secure · No card required
+            </p>
           </div>
-
-          <div>
-            <label className="mb-1 block text-[10px] font-bold uppercase tracking-wider text-[var(--color-text)]">
-              Password
-            </label>
-            <input
-              type="password"
-              name="password"
-              required
-              autoComplete="current-password"
-              value={formData.password}
-              onChange={handleChange}
-              placeholder="••••••••"
-              className="w-full rounded-lg border border-[var(--color-border)] bg-[var(--color-bg)] px-3 py-2 text-xs text-[var(--color-text)] outline-none transition-colors placeholder:text-zinc-400 dark:placeholder:text-zinc-500 focus:border-[var(--color-primary)] focus:bg-[var(--color-card)]"
-            />
-          </div>
-
-          <button
-            type="submit"
-            disabled={loading}
-            className="flex w-full items-center justify-center gap-2 rounded-lg bg-[var(--color-primary)] px-4 py-2 text-xs font-semibold text-white transition-opacity hover:opacity-90 disabled:opacity-60"
-          >
-            {loading ? <LoadingSpinner size="sm" /> : "Sign In"}
-          </button>
-        </form>
-
-        <p className="mt-6 text-center text-xs text-[var(--color-secondary)]">
-          Don&apos;t have an account?{" "}
-          <Link to="/register" className="font-semibold text-[var(--color-primary)] hover:underline">
-            Register
-          </Link>
-        </p>
+        </div>
       </div>
     </div>
   );
