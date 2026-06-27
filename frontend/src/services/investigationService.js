@@ -9,3 +9,14 @@ export const getInvestigationHistory = async (clusterId) => {
   const response = await api.get(`/clusters/${clusterId}/history`);
   return response.data;
 };
+
+export const getInvestigationById = async (investigationId) => {
+  const response = await api.get(`/clusters/investigation/${investigationId}`);
+  return response.data;
+};
+
+export const getAllInvestigations = async () => {
+  const response = await api.get("/clusters/investigations/all");
+  return response.data;
+};
+

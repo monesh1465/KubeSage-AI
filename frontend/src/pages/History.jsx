@@ -26,7 +26,6 @@ import { formatDateTime, normalizeStatus } from "../utils/status";
 import { getApiErrorMessage } from "../utils/errors";
 import {
   groupIssues,
-  countIssuesBySeverity,
   getMostCommonIssue,
   getMostAffectedNamespace,
   getIssuePriority,
@@ -230,27 +229,7 @@ function HistoryContent({ clusterId, clusterName }) {
     };
   }, [filteredHistory]);
 
-  const mostAffectedNamespace = useMemo(() => {
-    const namespaces = {};
-    filteredHistory.forEach((item) => {
-      parseIssues(item.issues).forEach((issue) => {
-        if (issue.namespace) {
-          namespaces[issue.namespace] = (namespaces[issue.namespace] || 0) + 1;
-        }
-      });
-    });
 
-    let topNamespace = "None";
-    let maxCount = 0;
-    Object.entries(namespaces).forEach(([ns, count]) => {
-      if (count > maxCount) {
-        maxCount = count;
-        topNamespace = ns;
-      }
-    });
-
-    return topNamespace;
-  }, [filteredHistory]);
 
   const totalPages = Math.ceil(sortedHistory.length / PAGE_SIZE);
   const paginatedHistory = useMemo(() => {
@@ -297,9 +276,7 @@ function HistoryContent({ clusterId, clusterName }) {
     setExpandedId(null);
   };
 
-  const mostCommonIssue = getMostCommonIssue(
-    sortedHistory.flatMap((item) => parseIssues(item.issues))
-  );
+
 
   if (loading) {
     return (

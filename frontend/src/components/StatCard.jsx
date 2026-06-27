@@ -1,4 +1,4 @@
-function StatCard({ title, value, icon: Icon, variant = "default" }) {
+function StatCard({ title, value, icon: Icon, variant = "default", subtext }) {
   const variantStyles = {
     default: "text-[var(--color-primary)] bg-[var(--color-primary)]/8",
     success: "text-[var(--color-success)] bg-[var(--color-success)]/8",
@@ -16,6 +16,11 @@ function StatCard({ title, value, icon: Icon, variant = "default" }) {
           <p className="mt-2 text-2xl font-bold tracking-tight text-[var(--color-text)]">
             {value}
           </p>
+          {subtext && (
+            <p className="mt-1 text-[11px] text-[var(--color-secondary)] font-medium">
+              {subtext}
+            </p>
+          )}
         </div>
         {Icon && (
           <div className={`flex h-10 w-10 items-center justify-center rounded-lg ${variantStyles[variant]}`}>

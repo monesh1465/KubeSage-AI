@@ -7,6 +7,7 @@ import {
   FiSettings,
   FiLogOut,
   FiX,
+  FiFileText,
 } from "react-icons/fi";
 import { useAuth } from "../context/AuthContext";
 
@@ -14,9 +15,9 @@ const navItems = [
   { to: "/dashboard", label: "Dashboard", icon: FiGrid },
   { to: "/clusters", label: "Clusters", icon: FiServer },
   { to: "/investigations", label: "Investigations", icon: FiSearch },
-  { to: "/history", label: "History", icon: FiClock },
   { to: "/settings", label: "Settings", icon: FiSettings },
 ];
+
 
 function Sidebar({ open, onClose }) {
   const navigate = useNavigate();

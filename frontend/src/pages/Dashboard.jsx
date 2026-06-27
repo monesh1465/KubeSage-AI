@@ -10,6 +10,9 @@ import {
   FiRefreshCw,
   FiLayers,
   FiBox,
+  FiZap,
+  FiFileText,
+  FiClock,
 } from "react-icons/fi";
 import StatCard from "../components/StatCard";
 import PageHeader from "../components/PageHeader";
@@ -17,19 +20,35 @@ import ErrorAlert from "../components/ErrorAlert";
 import PageSkeleton from "../components/PageSkeleton";
 import StatusBadge from "../components/StatusBadge";
 import { useClusters } from "../context/ClusterContext";
-import { getInvestigationHistory } from "../services/investigationService";
+import { getAllInvestigations } from "../services/investigationService";
 import { getNodes, getPods, getNamespaces } from "../services/clusterService";
 import { parseIssues } from "../utils/parseIssues";
-import { formatDateTime } from "../utils/status";
 import { getApiErrorMessage } from "../utils/errors";
 
 function getLatestInvestigationState(cluster) {
   const value = (cluster.latest_investigation_status || cluster.status || "").toLowerCase();
-
   if (value === "critical") return "Critical";
   if (value === "warning") return "Warning";
   if (value === "healthy") return "Healthy";
   return "Unknown";
+}
+
+function formatRelativeTime(dateStr) {
+  if (!dateStr) return "—";
+  const date = new Date(dateStr);
+  const now = new Date();
+  const diffMs = now - date;
+  const diffSec = Math.floor(diffMs / 1000);
+  const diffMin = Math.floor(diffSec / 60);
+  const diffHour = Math.floor(diffMin / 60);
+  const diffDay = Math.floor(diffHour / 24);
+
+  if (diffSec < 60) return "just now";
+  if (diffMin < 60) return `${diffMin}m ago`;
+  if (diffHour < 24) return `${diffHour}h ago`;
+  if (diffDay === 1) return "yesterday";
+  if (diffDay < 7) return `${diffDay}d ago`;
+  return date.toLocaleDateString(undefined, { month: "short", day: "numeric" });
 }
 
 function Dashboard() {
@@ -45,6 +64,14 @@ function Dashboard() {
   const [historyLoading, setHistoryLoading] = useState(true);
   const [resourceLoading, setResourceLoading] = useState(true);
   const [historyError, setHistoryError] = useState("");
+
+  const [stats, setStats] = useState({
+    healthyInvestigations: 0,
+    criticalInvestigations: 0,
+    aiReportsGenerated: 0,
+    lastInvestigationId: "—",
+    lastInvestigationTime: "",
+  });
 
   const loadResourceStats = useCallback(async (clusterList) => {
     const connectedClusters = clusterList.filter((cluster) => cluster.status === "connected");
@@ -97,41 +124,36 @@ function Dashboard() {
     setResourceLoading(false);
   }, []);
 
-  const loadHistory = useCallback(async (clusterList) => {
-    if (clusterList.length === 0) {
-      setRecentInvestigations([]);
-      setTotalInvestigations(0);
-      setHistoryLoading(false);
-      return;
-    }
-
+  const loadHistory = useCallback(async () => {
     setHistoryLoading(true);
     setHistoryError("");
 
     try {
-      const historyResults = await Promise.all(
-        clusterList.map(async (cluster) => {
-          try {
-            const history = await getInvestigationHistory(cluster.id);
-            return history.map((item) => ({
-              ...item,
-              clusterName: cluster.name,
-              clusterId: cluster.id,
-              issueCount: parseIssues(item.issues).length,
-            }));
-          } catch {
-            return [];
-          }
-        })
-      );
+      const allHistory = await getAllInvestigations();
+      const mapped = allHistory.map((item) => ({
+        ...item,
+        clusterName: item.cluster_name,
+        clusterId: item.cluster_id,
+        issueCount: parseIssues(item.issues).length,
+      }));
 
-      const allHistory = historyResults.flat();
-      setTotalInvestigations(allHistory.length);
-      setRecentInvestigations(
-        allHistory
-          .sort((a, b) => new Date(b.created_at) - new Date(a.created_at))
-          .slice(0, 5)
-      );
+      // Already sorted by created_at desc from backend, but let's double check
+      const sorted = [...mapped].sort((a, b) => new Date(b.created_at) - new Date(a.created_at));
+
+      const healthy = sorted.filter((inv) => inv.status?.toLowerCase() === "healthy").length;
+      const critical = sorted.filter((inv) => inv.status?.toLowerCase() === "critical").length;
+      const aiReports = sorted.filter((inv) => inv.has_ai_report).length;
+      const latest = sorted[0];
+
+      setTotalInvestigations(sorted.length);
+      setRecentInvestigations(sorted.slice(0, 5));
+      setStats({
+        healthyInvestigations: healthy,
+        criticalInvestigations: critical,
+        aiReportsGenerated: aiReports,
+        lastInvestigationId: latest ? `INV-${String(latest.id).padStart(5, "0")}` : "—",
+        lastInvestigationTime: latest ? formatRelativeTime(latest.created_at) : "",
+      });
     } catch (err) {
       setHistoryError(getApiErrorMessage(err, "Failed to load investigation history."));
     } finally {
@@ -141,12 +163,12 @@ function Dashboard() {
 
   const refreshDashboard = useCallback(async () => {
     const data = await refreshClusters();
-    await Promise.all([loadHistory(data), loadResourceStats(data)]);
+    await Promise.all([loadHistory(), loadResourceStats(data)]);
   }, [loadHistory, loadResourceStats, refreshClusters]);
 
   useEffect(() => {
     if (!loading) {
-      loadHistory(clusters);
+      loadHistory();
       loadResourceStats(clusters);
     }
   }, [clusters, loading, loadHistory, loadResourceStats]);
@@ -166,10 +188,6 @@ function Dashboard() {
   const handleRefresh = async () => {
     await refreshDashboard();
   };
-
-  const healthyClusters = clusters.filter((cluster) => getLatestInvestigationState(cluster) === "Healthy").length;
-  const warningClusters = clusters.filter((cluster) => getLatestInvestigationState(cluster) === "Warning").length;
-  const criticalClusters = clusters.filter((cluster) => getLatestInvestigationState(cluster) === "Critical").length;
 
   if (loading && clusters.length === 0) {
     return <PageSkeleton />;
@@ -196,7 +214,7 @@ function Dashboard() {
       />
 
       <ErrorAlert message={error} onRetry={handleRefresh} />
-      <ErrorAlert message={historyError} onRetry={() => loadHistory(clusters)} />
+      <ErrorAlert message={historyError} onRetry={loadHistory} />
 
       {/* Main Metrics Row */}
       <div className="grid gap-4 sm:grid-cols-2 lg:grid-cols-4">
@@ -218,14 +236,30 @@ function Dashboard() {
 
       {/* Detailed Status Row */}
       <div className="grid gap-4 sm:grid-cols-2 lg:grid-cols-4">
-        <StatCard title="Healthy Clusters" value={healthyClusters} icon={FiCheckCircle} variant="success" />
-        <StatCard title="Warning Clusters" value={warningClusters} icon={FiAlertTriangle} variant="warning" />
-        <StatCard title="Critical Clusters" value={criticalClusters} icon={FiAlertTriangle} variant="danger" />
         <StatCard
-          title="Failed Pods Alert"
-          value={resourceLoading ? "..." : resourceStats.failedPods}
+          title="Healthy Investigations"
+          value={stats.healthyInvestigations}
+          icon={FiCheckCircle}
+          variant="success"
+        />
+        <StatCard
+          title="Critical Investigations"
+          value={stats.criticalInvestigations}
           icon={FiAlertTriangle}
-          variant={resourceStats.failedPods > 0 ? "danger" : "success"}
+          variant="danger"
+        />
+        <StatCard
+          title="AI Reports Generated"
+          value={stats.aiReportsGenerated}
+          icon={FiZap}
+          variant="default"
+        />
+        <StatCard
+          title="Last Investigation"
+          value={stats.lastInvestigationId}
+          subtext={stats.lastInvestigationTime}
+          icon={FiClock}
+          variant="default"
         />
       </div>
 
@@ -240,7 +274,7 @@ function Dashboard() {
                 {totalInvestigations} total
               </span>
             </h2>
-            <Link to="/history" className="text-xs font-semibold text-[var(--color-primary)] hover:underline">
+            <Link to="/investigations" className="text-xs font-semibold text-[var(--color-primary)] hover:underline">
               View all
             </Link>
           </div>
@@ -255,23 +289,28 @@ function Dashboard() {
               </p>
             ) : (
               recentInvestigations.map((item) => (
-                <div
+                <Link
                   key={item.id}
-                  className="flex items-center justify-between gap-4 px-5 py-4 transition-colors hover:bg-[var(--color-bg)]/35"
+                  to={`/investigations/${item.id}`}
+                  className="flex items-center justify-between gap-4 px-5 py-3 transition-colors hover:bg-[var(--color-bg)]/35 block"
                 >
-                  <div className="min-w-0">
-                    <p className="text-xs font-bold text-[var(--color-text)]">{item.clusterName}</p>
-                    <p className="mt-1 truncate text-xs text-[var(--color-secondary)]">
-                      {item.summary}
-                    </p>
-                    <p className="mt-1.5 text-[10px] text-[var(--color-secondary)]/80">
-                      {formatDateTime(item.created_at)} · <span className="font-medium text-[var(--color-text)]">{item.issueCount} issues</span>
-                    </p>
-                  </div>
-                  <div className="shrink-0 text-right">
+                  <div className="flex items-center gap-4">
+                    <span className="font-mono text-xs font-bold text-[var(--color-primary)]">
+                      INV-{String(item.id).padStart(5, "0")}
+                    </span>
+                    <span className="text-xs font-semibold text-[var(--color-text)]">
+                      {item.clusterName}
+                    </span>
                     <StatusBadge status={item.status} />
                   </div>
-                </div>
+                  <div className="flex items-center gap-3 text-xs text-[var(--color-secondary)]">
+                    <span className="font-medium">
+                      {item.issueCount} {item.issueCount === 1 ? "Issue" : "Issues"}
+                    </span>
+                    <span>•</span>
+                    <span>{formatRelativeTime(item.created_at)}</span>
+                  </div>
+                </Link>
               ))
             )}
           </div>
@@ -286,7 +325,7 @@ function Dashboard() {
             <div className="space-y-2 p-4">
               {[
                 { to: "/clusters", icon: FiPlus, label: "Add Cluster" },
-                { to: "/investigations", icon: FiSearch, label: "Run Investigation" },
+                { to: "/clusters", icon: FiSearch, label: "Run Investigation" },
               ].map(({ to, icon: Icon, label }) => (
                 <Link
                   key={to}

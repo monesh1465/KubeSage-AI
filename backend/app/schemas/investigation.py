@@ -11,6 +11,7 @@ class IssueResponse(BaseModel):
 
 
 class InvestigationResponse(BaseModel):
+    id: int
     cluster_status: str
     issues: list[IssueResponse]
     summary: str

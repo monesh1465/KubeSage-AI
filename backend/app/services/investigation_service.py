@@ -228,25 +228,9 @@ def investigate_cluster(
     )
 
     should_insert = True
-    if latest:
-        latest_created_at = latest.created_at
-        if latest_created_at and latest_created_at.tzinfo is None:
-            latest_created_at = latest_created_at.replace(tzinfo=timezone.utc)
 
-        within_dedupe_window = (
-            latest_created_at is not None
-            and datetime.now(timezone.utc) - latest_created_at < timedelta(seconds=300)
-        )
-
-        same_payload = (
-            latest.status == cluster_status
-            and latest.summary == summary
-            and latest.issues == issues_json
-        )
-
-        if within_dedupe_window and same_payload:
-            should_insert = False
-
+    investigation_id = latest.id if latest else None
+    
     if should_insert:
         investigation = Investigation(
             cluster_id=cluster_id,
@@ -271,6 +255,8 @@ def investigate_cluster(
         )
         db.add(run)
         db.commit()
+        
+        investigation_id = investigation.id
 
     completed_at = datetime.now(timezone.utc)
     duration_seconds = max(time.perf_counter() - started_perf, 0.0)
@@ -285,4 +271,5 @@ def investigate_cluster(
         "started_at": started_at,
         "completed_at": completed_at,
         "duration_seconds": duration_seconds,
+        "id": investigation_id,
     }

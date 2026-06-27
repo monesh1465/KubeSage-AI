@@ -1,5 +1,5 @@
 import { useCallback, useEffect, useState } from "react";
-import { Link, useNavigate, useParams } from "react-router-dom";
+import { Link, useParams } from "react-router-dom";
 import {
   FiRefreshCw,
   FiSearch,
@@ -9,7 +9,9 @@ import {
   FiCloudOff,
   FiLayers,
   FiServer,
+  FiClock,
 } from "react-icons/fi";
+
 import DataTable from "../components/DataTable";
 import ErrorAlert from "../components/ErrorAlert";
 import EmptyState from "../components/EmptyState";
@@ -37,7 +39,7 @@ const tabs = [
 
 function ClusterDetails() {
   const { id } = useParams();
-  const navigate = useNavigate();
+
   const toast = useToast();
   const { getClusterById, refreshClusters, loading: clustersLoading } = useClusters();
   const cluster = getClusterById(id);
@@ -229,6 +231,14 @@ function ClusterDetails() {
             Refresh
           </button>
           <Link
+            to={`/investigations?cluster=${cluster.name}`}
+            className="inline-flex items-center gap-1.5 rounded-lg border border-[var(--color-border)] bg-[var(--color-card)] px-3 py-1.5 text-xs font-semibold text-[var(--color-text)] transition-colors hover:bg-[var(--color-bg)]"
+          >
+            <FiClock className="h-3.5 w-3.5" />
+            View History
+          </Link>
+
+          <Link
             to={`/clusters/${id}/investigate`}
             className={`inline-flex items-center gap-1.5 rounded-lg px-3 py-1.5 text-xs font-bold text-white transition-opacity hover:opacity-90 ${
               cluster.status === "connected"
@@ -240,6 +250,7 @@ function ClusterDetails() {
             Investigate
           </Link>
         </div>
+
       </div>
 
       <ErrorAlert message={error} onRetry={handleRefresh} />

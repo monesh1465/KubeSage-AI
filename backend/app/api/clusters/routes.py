@@ -7,8 +7,10 @@ from app.db.database import get_db
 from app.models.cluster import Cluster
 from app.models.investigation import Investigation
 from app.models.investigation_run import InvestigationRun
+from app.models.ai_analysis import AIAnalysis
 from app.models.user import User
 from app.schemas.cluster import ClusterCreate, ClusterResponse
+
 from app.schemas.event import EventResponse
 from app.schemas.history import InvestigationHistoryResponse
 from app.schemas.deployment import DeploymentResponse
@@ -295,3 +297,122 @@ def get_history(
         }
         for investigation in investigations
     ]
+
+
+@router.get("/investigations/all", response_model=list[dict])
+def get_all_investigations(
+    db: Session = Depends(get_db),
+    current_user: User = Depends(get_current_user),
+):
+    """Return all investigations across all clusters owned by the user, sorted by newest first."""
+    # 1. Get all owned cluster IDs and build a name map
+    clusters = db.query(Cluster).filter(Cluster.user_id == current_user.id).all()
+    cluster_map = {c.id: c.name for c in clusters}
+    cluster_ids = list(cluster_map.keys())
+
+    if not cluster_ids:
+        return []
+
+    # 2. Query all investigations for these clusters
+    investigations = (
+        db.query(Investigation)
+        .filter(Investigation.cluster_id.in_(cluster_ids))
+        .order_by(Investigation.created_at.desc())
+        .all()
+    )
+
+    if not investigations:
+        return []
+
+    # 3. Query all runs for these investigations
+    inv_ids = [inv.id for inv in investigations]
+    runs = {
+        run.investigation_id: run
+        for run in (
+            db.query(InvestigationRun)
+            .filter(InvestigationRun.investigation_id.in_(inv_ids))
+            .all()
+        )
+    }
+
+    # 4. Check which investigations have an AI Report
+    ai_report_investigation_ids = {
+        analysis.investigation_id
+        for analysis in (
+            db.query(AIAnalysis)
+            .filter(AIAnalysis.investigation_id.in_(inv_ids))
+            .all()
+        )
+    }
+
+    return [
+        {
+            "id": investigation.id,
+            "cluster_id": investigation.cluster_id,
+            "cluster_name": cluster_map.get(investigation.cluster_id, "Unknown Cluster"),
+            "status": investigation.status,
+            "summary": investigation.summary,
+            "issues": investigation.issues,
+            "created_at": investigation.created_at.isoformat() if investigation.created_at else None,
+            "started_at": runs.get(investigation.id).started_at if runs.get(investigation.id) else None,
+            "completed_at": runs.get(investigation.id).completed_at if runs.get(investigation.id) else None,
+            "duration_seconds": runs.get(investigation.id).duration_seconds if runs.get(investigation.id) else None,
+            "has_ai_report": investigation.id in ai_report_investigation_ids,
+        }
+        for investigation in investigations
+    ]
+
+
+
+# --------------------------------------------------------------------------- #
+#  GET /api/investigations/{investigation_id}  — fetch a single investigation  #
+#  by its own primary key, independent of which cluster it belongs to.         #
+# --------------------------------------------------------------------------- #
+
+@router.get("/investigation/{investigation_id}", response_model=InvestigationResponse)
+def get_investigation_by_id(
+    investigation_id: int,
+    db: Session = Depends(get_db),
+    current_user: User = Depends(get_current_user),
+):
+    """Return a single investigation row by its own database ID."""
+    import json as _json
+
+    investigation = (
+        db.query(Investigation)
+        .filter(Investigation.id == investigation_id)
+        .first()
+    )
+    if not investigation:
+        raise HTTPException(status_code=404, detail="Investigation not found")
+
+    # Verify the caller owns the parent cluster
+    cluster = (
+        db.query(Cluster)
+        .filter(Cluster.id == investigation.cluster_id, Cluster.user_id == current_user.id)
+        .first()
+    )
+    if not cluster:
+        raise HTTPException(status_code=403, detail="Access denied")
+
+    run = (
+        db.query(InvestigationRun)
+        .filter(InvestigationRun.investigation_id == investigation_id)
+        .first()
+    )
+
+    try:
+        issues = _json.loads(investigation.issues) if investigation.issues else []
+    except Exception:
+        issues = []
+
+    return {
+        "id": investigation.id,
+        "cluster_status": investigation.status,
+        "issues": issues,
+        "summary": investigation.summary,
+        "started_at": run.started_at if run else None,
+        "completed_at": run.completed_at if run else None,
+        "duration_seconds": run.duration_seconds if run else None,
+    }
+
