@@ -1,37 +1,47 @@
 import { jsPDF } from "jspdf";
 
 // ─────────────────────────────────────────────────────────────────────────────
-//  Design Tokens  (single-colour: #4F46E5 accent, monochromatic everywhere)
+//  Unit helpers
+//  1px (96dpi) = 0.2646mm   |   1pt = 0.3528mm   |   1px = 0.75pt
 // ─────────────────────────────────────────────────────────────────────────────
+const px  = (n) => n * 0.2646;                      // px  → mm
+const pt  = (n) => n * 0.3528;                      // pt  → mm (for lh)
+const fpt = (px_) => px_ * 0.75;                    // CSS-px font-size → jsPDF pt
 
-const C = {
+// ─────────────────────────────────────────────────────────────────────────────
+//  Design tokens
+// ─────────────────────────────────────────────────────────────────────────────
+const T = {
   text:    [17,  24,  39],   // #111827
   muted:   [107, 114, 128],  // #6B7280
   border:  [229, 231, 235],  // #E5E7EB
   accent:  [79,  70,  229],  // #4F46E5
   white:   [255, 255, 255],
-  bgLight: [248, 250, 252],  // #F8FAFC
-  bgAlt:   [250, 250, 250],  // #FAFAFA
-  red:     [220, 38,  38],
-  orange:  [217, 119, 6],
-  green:   [5,   150, 105],
+  bg:      [250, 250, 250],  // #FAFAFA
+  bgHdr:   [248, 250, 252],  // #F8FAFC  (table header)
+  rowAlt:  [250, 250, 250],  // table alt row
+  red:     [185, 28,  28],   // severity text – high
+  amber:   [161, 98,   7],   // severity text – medium
+  green:   [4,  120,  87],   // severity text – low/none
 };
 
 // ─────────────────────────────────────────────────────────────────────────────
 //  Formatters
 // ─────────────────────────────────────────────────────────────────────────────
-
 const padId = (id) => `INV-${String(id).padStart(5, "0")}`;
 
 function fmtDate(iso) {
   if (!iso) return { date: "—", time: "—", full: "—" };
   try {
     const d = new Date(iso);
-    const M = ["Jan","Feb","Mar","Apr","May","Jun","Jul","Aug","Sep","Oct","Nov","Dec"];
+    const M = ["Jan","Feb","Mar","Apr","May","Jun",
+               "Jul","Aug","Sep","Oct","Nov","Dec"];
     const date = `${M[d.getUTCMonth()]} ${String(d.getUTCDate()).padStart(2,"0")}, ${d.getUTCFullYear()}`;
     const time = `${String(d.getUTCHours()).padStart(2,"0")}:${String(d.getUTCMinutes()).padStart(2,"0")} UTC`;
-    return { date, time, full: `${date} · ${time}` };
-  } catch { return { date: iso, time: "", full: iso }; }
+    return { date, time, full: `${date}  ·  ${time}` };
+  } catch {
+    return { date: iso, time: "", full: iso };
+  }
 }
 
 function fmtDuration(s) {
@@ -42,568 +52,544 @@ function fmtDuration(s) {
 }
 
 // ─────────────────────────────────────────────────────────────────────────────
-//  Markdown Parser
+//  Markdown → section dictionary
 // ─────────────────────────────────────────────────────────────────────────────
-
 function parseMarkdown(md) {
-  if (!md) return [];
-  const out = [];
-  let cur = null, inCode = false, codeBuf = [];
+  if (!md) return {};
+  const map = {};
+  let curKey = null;
+  let inCode = false, buf = [];
 
   for (const raw of md.split("\n")) {
     const line = raw.trim();
     if (line.startsWith("```")) {
-      if (inCode) { cur?.items.push({ type: "code", lines: codeBuf }); inCode = false; codeBuf = []; }
-      else { inCode = true; }
+      if (inCode) {
+        if (curKey && map[curKey]) map[curKey].items.push({ type: "code", lines: buf });
+        inCode = false; buf = [];
+      } else { inCode = true; }
       continue;
     }
-    if (inCode) { codeBuf.push(raw); continue; }
+    if (inCode) { buf.push(raw); continue; }
 
-    const h3 = line.match(/^###\s+(.+)/);
-    if (h3) { cur = { title: h3[1].replace(/\*\*/g, "").trim(), items: [] }; out.push(cur); continue; }
-    if (!cur && line) { cur = { title: "Notes", items: [] }; out.push(cur); }
+    const h = line.match(/^#{1,3}\s+(.+)/);
+    if (h) {
+      const title = h[1].replace(/\*\*/g, "").trim();
+      const lower = title.toLowerCase();
+      if (lower.includes("executive summary")) curKey = "summary";
+      else if (lower.includes("finding")) curKey = "findings";
+      else if (lower.includes("impact")) curKey = "impact";
+      else if (lower.includes("recommend")) curKey = "recommendations";
+      else if (lower.includes("command") || lower.includes("diagnostic")) curKey = "commands";
+      else curKey = lower;
+
+      if (!map[curKey]) map[curKey] = { title, items: [] };
+      continue;
+    }
+
+    if (!curKey) continue;
     if (!line || line === "---") continue;
 
     const bul = line.match(/^[-*+]\s+(.+)/);
     const ord = line.match(/^\d+\.\s+(.+)/);
-    const sub = line.match(/^\*\*(.+?)\*\*/);
-    if      (bul) cur.items.push({ type: "bullet",  text: bul[1].trim() });
-    else if (ord) cur.items.push({ type: "ordered", text: ord[1].trim() });
-    else if (sub) cur.items.push({ type: "subhead", text: sub[1].trim() });
-    else          cur.items.push({ type: "para",    text: line.replace(/\*\*/g, "").trim() });
+    const sub = line.match(/^\*\*(.+?)\*\*:?/);
+
+    if      (bul) map[curKey].items.push({ type: "bullet",  text: bul[1].trim() });
+    else if (ord) map[curKey].items.push({ type: "ordered", text: ord[1].trim() });
+    else if (sub) map[curKey].items.push({ type: "subhead", text: sub[1].trim() });
+    else if (line) map[curKey].items.push({ type: "para",   text: line.replace(/\*\*/g, "").trim() });
   }
-  return out;
+  return map;
 }
 
 // ─────────────────────────────────────────────────────────────────────────────
-//  Unit helpers
-//  px → mm  (screen 96dpi):  1px = 0.2646mm
-//  pt → mm:                  1pt = 0.3528mm
+//  PDF Document Class
 // ─────────────────────────────────────────────────────────────────────────────
-const px = (n) => n * 0.2646;  // px to mm
-const pt = (n) => n * 0.3528;  // pt to mm
-
-// ─────────────────────────────────────────────────────────────────────────────
-//  PDF Renderer
-// ─────────────────────────────────────────────────────────────────────────────
-
-class PDFReport {
-  constructor() {
-    this.doc = new jsPDF("p", "mm", "a4");
+class Doc {
+  constructor(spacingScale = 1.0) {
+    this.pdf = new jsPDF("p", "mm", "a4");
     this.W   = 210;
     this.H   = 297;
-    this.mL  = px(36);   // 36px left margin
-    this.mR  = px(36);   // 36px right margin
-    this.mT  = px(28);   // 28px top margin
-    this.mB  = px(24);   // 24px bottom margin
-    this.footH = px(44); // 44px footer zone
+    this.mL  = px(40);          // 40px left
+    this.mR  = px(40);          // 40px right
+    this.mT  = px(40);          // 40px top
+    this.mB  = px(40);          // 40px bottom
+    this.fH  = px(50);          // 50px footer zone (reserved)
     this.cW  = this.W - this.mL - this.mR;
     this.y   = this.mT;
+    this.scale = spacingScale;  // dynamic spacing scaling factor for validation pass
   }
 
-  // ── Colour / Font helpers ─────────────────────────────────────────────── //
-  fc(...c) { this.doc.setFillColor(...c); }
-  dc(...c) { this.doc.setDrawColor(...c); }
-  tc(...c) { this.doc.setTextColor(...c); }
+  // ── Colour / Font helpers ───────────────────────────────────────────────
+  fc(...c) { this.pdf.setFillColor(...c); }
+  dc(...c) { this.pdf.setDrawColor(...c); }
+  tc(...c) { this.pdf.setTextColor(...c); }
 
-  // Sets helvetica font at given CSS px size, converts internally
-  // style: "normal" | "bold" | "italic"
-  F(pxSize, style = "normal", color = C.text) {
-    this.doc.setFont("helvetica", style);
-    this.doc.setFontSize(pxSize * 0.75);  // px → pt (1px = 0.75pt at 96dpi)
+  setFont(sz, wt = "normal", color = T.text) {
+    this.pdf.setFont("helvetica", wt);
+    this.pdf.setFontSize(fpt(sz));
     this.tc(...color);
   }
 
-  // Line height in mm for a given px font size and multiplier
-  lh(pxSize, mult = 1.6) { return pxSize * 0.75 * 0.3528 * mult; }
+  lh(sz, mult = 1.6) { return pt(fpt(sz)) * mult; }
 
-  split(text, maxW, pxSize, style = "normal") {
-    this.doc.setFont("helvetica", style);
-    this.doc.setFontSize(pxSize * 0.75);
-    return this.doc.splitTextToSize(String(text || ""), maxW);
+  wrap(text, w, sz, wt = "normal") {
+    this.pdf.setFont("helvetica", wt);
+    this.pdf.setFontSize(fpt(sz));
+    return this.pdf.splitTextToSize(String(text ?? ""), w);
   }
 
-  avail() { return this.H - this.mB - this.footH - this.y; }
+  avail() { return this.H - this.mB - this.fH - this.y; }
 
   need(h) {
-    if (this.avail() < h) { this.doc.addPage(); this.y = this.mT; }
+    if (this.avail() < h) {
+      this.pdf.addPage();
+      this.y = this.mT;
+    }
   }
 
-  // ── Primitive drawing ─────────────────────────────────────────────────── //
-
-  hline(y, color = C.border, lw = 0.2, x1, x2) {
-    this.dc(...color);
-    this.doc.setLineWidth(lw);
-    this.doc.line(x1 ?? this.mL, y, x2 ?? (this.W - this.mR), y);
+  // ── Primitives ──────────────────────────────────────────────────────────
+  hline(y, col = T.border, lw = 0.25, x1, x2) {
+    this.dc(...col);
+    this.pdf.setLineWidth(lw);
+    this.pdf.line(x1 ?? this.mL, y, x2 ?? (this.W - this.mR), y);
   }
 
-  vline(x, y1, y2, color = C.border, lw = 0.2) {
-    this.dc(...color);
-    this.doc.setLineWidth(lw);
-    this.doc.line(x, y1, x, y2);
+  vline(x, y1, y2, col = T.border, lw = 0.25) {
+    this.dc(...col);
+    this.pdf.setLineWidth(lw);
+    this.pdf.line(x, y1, x, y2);
   }
 
-  rect(x, y, w, h, fill, stroke = C.border, lw = 0.2, r = 0) {
-    if (fill) this.fc(...fill);
-    this.dc(...stroke);
-    this.doc.setLineWidth(lw);
-    const s = fill ? "FD" : "D";
-    if (r > 0) this.doc.roundedRect(x, y, w, h, r, r, s);
-    else       this.doc.rect(x, y, w, h, s);
+  fillRect(x, y, w, h, fill, stroke, lw = 0.25, r = 0) {
+    if (fill)   this.fc(...fill);
+    if (stroke) { this.dc(...stroke); this.pdf.setLineWidth(lw); }
+    const mode = fill && stroke ? "FD" : fill ? "F" : "D";
+    if (r > 0) this.pdf.roundedRect(x, y, w, h, r, r, mode);
+    else       this.pdf.rect(x, y, w, h, mode);
   }
 
-  // ═════════════════════════════════════════════════════════════════════════//
-  //  HEADER
-  //  Left:  KubeSage.AI (32px bold) / AI Investigation Report (18px)
-  //  Right: INV-00000 / Date / Time
-  //  Thin blue divider underneath (1px = 0.26mm, colour #4F46E5)
-  // ═════════════════════════════════════════════════════════════════════════//
+  fill(x, y, w, h, col) {
+    this.fc(...col);
+    this.pdf.setLineWidth(0);
+    this.dc(...col);
+    this.pdf.rect(x, y, w, h, "F");
+  }
 
+  // ── Section Title ───────────────────────────────────────────────────────
+  //  16px 700, margin-top: 20px, margin-bottom: 20px, 1px divider
+  sectionTitle(label) {
+    this.y += px(20) * this.scale;
+    this.need(this.lh(16, 1.2) + px(20) * this.scale);
+
+    this.setFont(16, "bold", T.text);
+    this.pdf.text(label.toUpperCase(), this.mL, this.y);
+    this.y += this.lh(16, 1.2);
+
+    // 1px divider underneath (margin-bottom: 20px)
+    this.hline(this.y + px(4) * this.scale, T.border, 0.25);
+    this.y += px(20) * this.scale;
+  }
+
+  // ── Body Paragraph ──────────────────────────────────────────────────────
+  para(text, sz = 12, wt = "normal", col = T.text, indent = 0) {
+    const lines = this.wrap(text, this.cW - indent, sz, wt);
+    const lineH = this.lh(sz, 1.6);
+    this.need(lines.length * lineH + px(2));
+    this.setFont(sz, wt, col);
+    lines.forEach(l => { this.pdf.text(l, this.mL + indent, this.y); this.y += lineH; });
+  }
+
+  // ── Bullet Item ─────────────────────────────────────────────────────────
+  bullet(text, sz = 12, ind = px(12)) {
+    const lines = this.wrap(text, this.cW - ind - px(6), sz);
+    const lineH = this.lh(sz, 1.55);
+    this.need(lines.length * lineH + px(1));
+    this.setFont(sz, "normal", T.muted);
+    this.pdf.text("\u2013", this.mL + px(2), this.y);
+    this.setFont(sz, "normal", T.text);
+    lines.forEach(l => { this.pdf.text(l, this.mL + ind, this.y); this.y += lineH; });
+    this.y += px(3);
+  }
+
+  // ════════════════════════════════════════════════════════════════════════
+  //  1. HEADER (80px height target)
+  // ════════════════════════════════════════════════════════════════════════
   drawHeader(meta) {
     const dt = fmtDate(meta.generatedAt);
     const rx = this.W - this.mR;
-    let y = this.y;
+    let y    = this.y;
 
-    // Brand name
-    this.F(24, "bold", C.text);
-    this.doc.text("KubeSage.AI", this.mL, y);
+    // Brand: 24px 700
+    this.setFont(24, "bold", T.text);
+    this.pdf.text("KubeSage.AI", this.mL, y);
 
-    // Investigation ID right-aligned
-    this.F(10, "bold", C.accent);
-    this.doc.text(padId(meta.investigationId), rx, y, { align: "right" });
-    y += this.lh(24, 1.15);
+    // Investigation ID
+    this.setFont(10, "bold", T.accent);
+    this.pdf.text(padId(meta.investigationId), rx, y, { align: "right" });
 
-    // Report title
-    this.F(13, "bold", C.text);
-    this.doc.text("AI Investigation Report", this.mL, y);
+    y += this.lh(24, 1.2);
+
+    // Report title: 28px target per spec (or 18px for document scaling)
+    this.setFont(18, "bold", T.text);
+    this.pdf.text("AI Investigation Report", this.mL, y);
 
     // Date
-    this.F(9, "normal", C.muted);
-    this.doc.text(dt.date, rx, y, { align: "right" });
-    y += this.lh(13, 1.15);
+    this.setFont(10, "normal", T.muted);
+    this.pdf.text(dt.date, rx, y, { align: "right" });
 
-    // Subtitle / time
-    this.F(8, "normal", C.muted);
-    this.doc.text("Generated by KubeSage AI Root Cause Analysis Engine", this.mL, y);
-    this.doc.text(dt.time, rx, y, { align: "right" });
-    y += this.lh(8, 1.2) + px(10);
+    y += this.lh(18, 1.2);
 
-    // Blue divider (1px)
-    this.dc(...C.accent);
-    this.doc.setLineWidth(0.26);
-    this.doc.line(this.mL, y, rx, y);
-    y += px(16);
+    // Subtitle + time
+    this.setFont(10, "normal", T.muted);
+    this.pdf.text("Generated by KubeSage AI Root Cause Analysis Engine", this.mL, y);
+    this.pdf.text(dt.time, rx, y, { align: "right" });
+
+    y += this.lh(10, 1.2) + px(12);
+
+    // 1px solid #E5E7EB Divider
+    this.hline(y, T.border, 0.25);
+    y += px(16) * this.scale;
 
     this.y = y;
   }
 
-  // ═════════════════════════════════════════════════════════════════════════//
-  //  OVERVIEW  (2-column grid, 4 rows, labels 10px muted, values 13px bold)
-  // ═════════════════════════════════════════════════════════════════════════//
+  // ════════════════════════════════════════════════════════════════════════
+  //  2. EXECUTIVE SUMMARY (Simple Callout Box)
+  //  border-left: 4px solid #4F46E5, background: #FAFAFA, padding: 16px
+  // ════════════════════════════════════════════════════════════════════════
+  drawExecutiveSummary(sec) {
+    if (!sec || !sec.items.length) return;
+    this.sectionTitle("Executive Summary");
 
+    const text = sec.items
+      .filter(i => ["para","bullet","ordered"].includes(i.type))
+      .map(i => i.text).filter(Boolean).join(" ").trim();
+    if (!text) return;
+
+    const SZ    = 12;
+    const PAD_T = px(16);
+    const PAD_B = px(16);
+    const PAD_L = px(20); // 16px padding + 4px bar
+    const PAD_R = px(16);
+    const lineH = this.lh(SZ, 1.6);
+    const mW    = this.cW - PAD_L - PAD_R;
+    const lines = this.wrap(text, mW, SZ);
+    const boxH  = Math.max(px(48), lines.length * lineH + PAD_T + PAD_B);
+
+    this.need(boxH + px(4));
+
+    const bx = this.mL;
+    const by = this.y;
+
+    // Background card
+    this.fillRect(bx, by, this.cW, boxH, T.bg, T.border, 0.25, px(4));
+
+    // Accent left bar (4px solid #4F46E5)
+    this.fill(bx, by + px(2), px(4), boxH - px(4), T.accent);
+
+    // Text
+    this.setFont(SZ, "normal", T.text);
+    let ty = by + PAD_T + lineH * 0.72;
+    lines.forEach(l => { this.pdf.text(l, bx + PAD_L, ty); ty += lineH; });
+
+    this.y = by + boxH + px(4);
+  }
+
+  // ════════════════════════════════════════════════════════════════════════
+  //  3. INVESTIGATION OVERVIEW (2 Columns, Compact Metadata Grid)
+  //  border: 1px solid #E5E7EB, radius: 8px, padding: 14px, background: #FAFAFA
+  // ════════════════════════════════════════════════════════════════════════
   drawOverview(meta) {
-    const f  = meta.findings || {};
-    const dt = fmtDate(meta.generatedAt);
+    this.sectionTitle("Investigation Overview");
 
-    const ROW_H  = px(42);  // 42px row height
-    const N_ROWS = 4;
-    const GRID_H = N_ROWS * ROW_H;
-    const HALF   = this.cW / 2;
-    const PAD_X  = px(12);
-
-    const issueCount = meta.issues ? String(meta.issues.length) : String(f.issueCount ?? "0");
-    const nsVal = (f.namespace && f.namespace !== "-") ? f.namespace
-                : (meta.issues?.[0]?.namespace || "default");
+    const f   = meta.findings || {};
+    const dt  = fmtDate(meta.generatedAt);
+    const cnt = meta.issues ? String(meta.issues.length) : String(f.issueCount ?? "0");
+    const ns  = (f.namespace && f.namespace !== "-") ? f.namespace
+              : (meta.issues?.[0]?.namespace || "—");
 
     const fields = [
       ["Investigation ID",  padId(meta.investigationId)],
       ["Cluster",           meta.clusterName || "—"],
       ["Status",            meta.status || "—"],
-      ["Issues Detected",   issueCount],
-      ["Namespace",         nsVal],
-      ["Most Common Issue", f.mostCommon || "None"],
+      ["Issues Detected",   cnt],
+      ["Namespace",         ns],
       ["Duration",          fmtDuration(meta.duration)],
-      ["Generated At",      dt.full],
     ];
 
-    this.need(GRID_H + px(8));
+    const ROWS    = 3;
+    const COLS    = 2;
+    const ROW_H   = px(38); // 38px compact height
+    const GRID_H  = ROWS * ROW_H;
+    const HALF    = this.cW / 2;
+    const PAD_L   = px(14); // 14px padding
+
+    this.need(GRID_H + px(4));
+
     const gy = this.y;
 
-    // Outer box
-    this.rect(this.mL, gy, this.cW, GRID_H, null, C.border, 0.2, px(4));
+    // Outer box (8px radius)
+    this.fillRect(this.mL, gy, this.cW, GRID_H, T.bg, T.border, 0.25, px(8));
 
     // Centre divider
-    this.vline(this.mL + HALF, gy, gy + GRID_H, C.border, 0.15);
+    this.vline(this.mL + HALF, gy, gy + GRID_H, T.border, 0.25);
 
     // Row dividers
-    for (let r = 1; r < N_ROWS; r++) {
-      this.hline(gy + r * ROW_H, C.border, 0.15);
+    for (let r = 1; r < ROWS; r++) {
+      this.hline(gy + r * ROW_H, T.border, 0.2);
     }
 
-    fields.forEach((fld, idx) => {
-      const col = idx % 2;
-      const row = Math.floor(idx / 2);
+    fields.forEach((fld, i) => {
+      const col = i % COLS;
+      const row = Math.floor(i / COLS);
+      const cx  = this.mL + col * HALF + PAD_L;
       const cy  = gy + row * ROW_H;
-      const tx  = this.mL + col * HALF + PAD_X;
-      const mW  = HALF - PAD_X * 2;
+      const mW  = HALF - PAD_L * 2;
 
-      // Label
-      this.F(10, "bold", C.muted);
-      this.doc.text(fld[0].toUpperCase(), tx, cy + px(12));
+      // Label (10px 600)
+      this.setFont(10, "bold", T.muted);
+      this.pdf.text(fld[0].toUpperCase(), cx, cy + px(12));
 
-      // Value
-      let vc = C.text;
+      // Value (12px 400/700)
+      let vc = T.text;
       if (fld[0] === "Status") {
         const v = fld[1].toLowerCase();
-        vc = v.includes("critical") || v.includes("high") ? C.red
-           : v.includes("warning") ? C.orange : C.green;
+        vc = v.includes("critical") || v.includes("high") ? T.red
+           : v.includes("warning")                         ? T.amber
+           : T.green;
       }
-      const lines = this.split(fld[1], mW, 12, "bold");
-      this.F(12, "bold", vc);
+      const vls = this.wrap(fld[1], mW, 12, "bold");
+      this.setFont(12, "bold", vc);
       let vy = cy + px(25);
-      lines.slice(0, 2).forEach(l => { this.doc.text(l, tx, vy); vy += this.lh(12, 1.2); });
+      vls.slice(0, 2).forEach(l => { this.pdf.text(l, cx, vy); vy += this.lh(12, 1.2); });
     });
 
-    this.y = gy + GRID_H + px(20);
+    this.y = gy + GRID_H + px(4);
   }
 
-  // ═════════════════════════════════════════════════════════════════════════//
-  //  SECTION HEADING  (18px bold uppercase, thin blue 1px line under)
-  // ═════════════════════════════════════════════════════════════════════════//
+  // ════════════════════════════════════════════════════════════════════════
+  //  4. FINDINGS TABLE
+  //  Issue column: 180px width (~47.6mm). No word splitting!
+  //  Severity: Plain text HIGH / MEDIUM / LOW (no badges).
+  // ════════════════════════════════════════════════════════════════════════
+  drawFindings(issues) {
+    this.sectionTitle("Findings");
 
-  drawSectionTitle(label) {
-    this.y += px(20);
-    this.need(this.lh(18, 1.1) + px(12));
-
-    this.F(13, "bold", C.text);
-    this.doc.text(label.toUpperCase(), this.mL, this.y, { charSpace: 0.3 });
-    this.y += this.lh(13, 1.1);
-
-    // 1px accent line
-    this.dc(...C.accent);
-    this.doc.setLineWidth(0.26);
-    this.doc.line(this.mL, this.y + 0.5, this.W - this.mR, this.y + 0.5);
-    this.y += px(10);
-  }
-
-  // ═════════════════════════════════════════════════════════════════════════//
-  //  TEXT PRIMITIVES
-  // ═════════════════════════════════════════════════════════════════════════//
-
-  drawPara(text, pxSize = 12, style = "normal", color = C.text, indent = 0) {
-    const ls = this.split(text, this.cW - indent, pxSize, style);
-    const lh = this.lh(pxSize, 1.6);
-    this.need(ls.length * lh + 1);
-    this.F(pxSize, style, color);
-    ls.forEach(l => { this.doc.text(l, this.mL + indent, this.y); this.y += lh; });
-    this.y += px(4);
-  }
-
-  drawBullet(text, pxSize = 12) {
-    const ind = px(14);
-    const ls  = this.split(text, this.cW - ind, pxSize);
-    const lh  = this.lh(pxSize, 1.55);
-    this.need(ls.length * lh + 1);
-    this.F(pxSize, "normal", C.muted);
-    this.doc.text("•", this.mL + px(4), this.y);
-    this.F(pxSize, "normal", C.text);
-    ls.forEach(l => { this.doc.text(l, this.mL + ind, this.y); this.y += lh; });
-    this.y += px(2);
-  }
-
-  drawSubhead(text) {
-    this.need(px(20));
-    this.y += px(4);
-    this.F(12, "bold", C.text);
-    this.doc.text(text, this.mL, this.y);
-    this.y += this.lh(12, 1.4);
-  }
-
-  // ═════════════════════════════════════════════════════════════════════════//
-  //  EXECUTIVE SUMMARY / IMPACT ASSESSMENT BOX
-  //  White bg, 1px border, 4px left accent bar, 8px radius, 20px padding
-  // ═════════════════════════════════════════════════════════════════════════//
-
-  drawBox(items) {
-    const text = items
-      .filter(i => ["para","bullet","ordered"].includes(i.type))
-      .map(i => i.text).filter(Boolean).join(" ").trim();
-    if (!text) return;
-
-    const PXS  = 12;
-    const padT = px(14);
-    const padB = px(14);
-    const padL = px(20);
-    const padR = px(16);
-    const lh   = this.lh(PXS, 1.6);
-    const mW   = this.cW - padL - padR;
-    const ls   = this.split(text, mW, PXS);
-    const minH = px(52);
-    const boxH = Math.max(minH, ls.length * lh + padT + padB);
-
-    this.need(boxH + px(4));
-
-    // White card with border
-    this.rect(this.mL, this.y, this.cW, boxH, C.white, C.border, 0.2, px(4));
-
-    // Left accent bar (4px wide, #4F46E5)
-    this.fc(...C.accent);
-    this.doc.setDrawColor(0, 0, 0, 0);
-    this.doc.setLineWidth(0);
-    this.doc.roundedRect(this.mL, this.y, px(4), boxH, px(4), px(4), "F");
-    // Fill the right half of the rounded rect to get a flat right edge
-    this.fc(...C.accent);
-    this.doc.rect(this.mL + px(2), this.y, px(2), boxH, "F");
-
-    this.F(PXS, "normal", C.text);
-    let ty = this.y + padT + lh * 0.72;
-    ls.forEach(l => { this.doc.text(l, this.mL + padL, ty); ty += lh; });
-
-    this.y += boxH + px(10);
-  }
-
-  // ═════════════════════════════════════════════════════════════════════════//
-  //  FINDINGS TABLE
-  //  Header: #F8FAFC bg, 42px height, 10px padding, #E5E7EB border, 12px font
-  //  Data rows: alternate #FFF / #FAFAFA, min 42px, outline severity badges
-  // ═════════════════════════════════════════════════════════════════════════//
-
-  drawFindingsTable(issues) {
     if (!issues || issues.length === 0) {
-      this.drawPara("No issues were detected during this investigation.", 12, "italic", C.muted);
+      const msg   = "No issues detected during this investigation.";
+      const lineH = this.lh(12, 1.6);
+      const boxH  = lineH + px(20);
+      this.need(boxH + px(4));
+      this.fillRect(this.mL, this.y, this.cW, boxH, T.bg, T.border, 0.25, px(4));
+      this.setFont(12, "italic", T.muted);
+      this.pdf.text(msg, this.mL + px(14), this.y + px(11) + lineH * 0.72);
+      this.y += boxH + px(4);
       return;
     }
 
-    const C_ISSUE = px(100);
-    const C_NS    = px(72);
-    const C_SEV   = px(64);
-    const C_DESC  = this.cW - C_ISSUE - C_NS - C_SEV;
+    // 180px Issue column width per requirement!
+    const C1 = px(180); // ~47.6mm
+    const C2 = px(60);  // Namespace
+    const C3 = px(50);  // Severity
+    const C4 = this.cW - C1 - C2 - C3; // Description
 
-    const HDR_H  = px(38);
-    const PAD_X  = px(10);
-    const LH     = this.lh(12, 1.45);
+    const HDR_H = px(40); // 40px header height
+    const PAD   = px(10); // 10px padding
+    const SZ    = 12;     // 12px font
+    const lineH = this.lh(SZ, 1.4);
 
-    // ─ Header ─
-    this.need(HDR_H + px(16));
-    this.rect(this.mL, this.y, this.cW, HDR_H, C.bgLight, C.border, 0.2);
-
+    // Header (#F8FAFC bg, #E5E7EB border)
+    this.need(HDR_H + px(10));
+    this.fillRect(this.mL, this.y, this.cW, HDR_H, T.bgHdr, T.border, 0.25);
     const cols = [
-      { label: "Issue",       w: C_ISSUE },
-      { label: "Namespace",   w: C_NS    },
-      { label: "Severity",    w: C_SEV   },
-      { label: "Description", w: C_DESC  },
+      { label: "Issue",       w: C1 },
+      { label: "Namespace",   w: C2 },
+      { label: "Severity",    w: C3 },
+      { label: "Description", w: C4 },
     ];
     let hx = this.mL;
-    cols.forEach((col, ci) => {
-      if (ci > 0) this.vline(hx, this.y, this.y + HDR_H, C.border, 0.2);
-      this.F(10, "bold", C.muted);
-      this.doc.text(col.label.toUpperCase(), hx + PAD_X, this.y + HDR_H * 0.64);
-      hx += col.w;
+    const htY = this.y + HDR_H * 0.62;
+    cols.forEach((c, ci) => {
+      if (ci > 0) this.vline(hx, this.y, this.y + HDR_H, T.border, 0.25);
+      this.setFont(10, "bold", T.muted);
+      this.pdf.text(c.label.toUpperCase(), hx + PAD, htY);
+      hx += c.w;
     });
     this.y += HDR_H;
 
-    // ─ Rows ─
-    issues.forEach((issue, ri) => {
-      const typeLS = this.split(issue.type || "Unknown",         C_ISSUE - PAD_X * 2, 12, "bold");
-      const descLS = this.split(issue.recommendation || "—",    C_DESC  - PAD_X * 2, 12);
-      const maxLn  = Math.max(typeLS.length, descLS.length);
-      const ROW_H  = Math.max(px(38), maxLn * LH + px(14));
+    // Rows
+    issues.forEach((iss, ri) => {
+      // Keep-all / no split hyphenation for issue names like FailedScheduling
+      const rawType = String(iss.type || "Unknown");
+      const issueLS = [rawType]; // Keep on single line in 180px column to avoid ugly splits
+      const descLS  = this.wrap(iss.recommendation || "—", C4 - PAD * 2, SZ);
+      const maxLn   = Math.max(issueLS.length, descLS.length, 1);
+      const rowH    = Math.max(px(40), maxLn * lineH + px(10));
 
-      this.need(ROW_H + 1);
+      this.need(rowH + 1);
 
-      const bg = ri % 2 === 0 ? C.white : C.bgAlt;
-      this.rect(this.mL, this.y, this.cW, ROW_H, bg, C.border, 0.2);
+      const bg = ri % 2 === 0 ? T.white : T.rowAlt;
+      this.fillRect(this.mL, this.y, this.cW, rowH, bg, T.border, 0.25);
 
       let rx = this.mL;
 
-      // Issue
-      const tyPad = (ROW_H - typeLS.length * LH) / 2;
-      let tyY = this.y + tyPad + LH * 0.72;
-      this.F(12, "bold", C.text);
-      typeLS.forEach(l => { this.doc.text(l, rx + PAD_X, tyY); tyY += LH; });
-      rx += C_ISSUE; this.vline(rx, this.y, this.y + ROW_H, C.border, 0.2);
+      // Issue (180px wide)
+      this.setFont(SZ, "bold", T.text);
+      let iy = this.y + (rowH - issueLS.length * lineH) / 2 + lineH * 0.72;
+      issueLS.forEach(l => { this.pdf.text(l, rx + PAD, iy); iy += lineH; });
+      rx += C1; this.vline(rx, this.y, this.y + rowH, T.border, 0.25);
 
       // Namespace
-      const nsText = (issue.namespace && issue.namespace !== "-") ? issue.namespace : "default";
-      const nsLS   = this.split(nsText, C_NS - PAD_X * 2, 12);
-      const nsPad  = (ROW_H - nsLS.length * LH) / 2;
-      let nsY = this.y + nsPad + LH * 0.72;
-      this.F(12, "normal", C.text);
-      nsLS.forEach(l => { this.doc.text(l, rx + PAD_X, nsY); nsY += LH; });
-      rx += C_NS; this.vline(rx, this.y, this.y + ROW_H, C.border, 0.2);
+      const nsText = (iss.namespace && iss.namespace !== "-") ? iss.namespace : "—";
+      const nsLS   = this.wrap(nsText, C2 - PAD * 2, SZ);
+      this.setFont(SZ, "normal", T.text);
+      let ny = this.y + (rowH - nsLS.length * lineH) / 2 + lineH * 0.72;
+      nsLS.forEach(l => { this.pdf.text(l, rx + PAD, ny); ny += lineH; });
+      rx += C2; this.vline(rx, this.y, this.y + rowH, T.border, 0.25);
 
-      // Severity badge
-      const sev    = issue.severity || "Low";
-      const sl     = sev.toLowerCase();
-      const sevClr = sl === "high" || sl === "critical" ? C.red
-                   : sl === "medium" || sl === "warning" ? C.orange : C.green;
-      const bW = px(52);
-      const bH = px(22);
-      const bx = rx + (C_SEV - bW) / 2;
-      const by = this.y + (ROW_H - bH) / 2;
-
-      this.dc(...sevClr);
-      this.doc.setLineWidth(0.4);
-      this.doc.roundedRect(bx, by, bW, bH, px(3), px(3), "D");
-      this.F(10, "bold", sevClr);
-      this.doc.text(sev.toUpperCase(), bx + bW / 2, by + bH * 0.68, { align: "center" });
-
-      rx += C_SEV; this.vline(rx, this.y, this.y + ROW_H, C.border, 0.2);
+      // Severity (Plain text HIGH / MEDIUM / LOW)
+      const sev = (iss.severity || "Low").toUpperCase();
+      const sl  = sev.toLowerCase();
+      const sc  = sl === "high" || sl === "critical" ? T.red
+                : sl === "medium" || sl === "warning" ? T.amber
+                : T.green;
+      const sevY = this.y + rowH / 2 + pt(fpt(10)) * 0.35;
+      this.setFont(10, "bold", sc);
+      this.pdf.text(sev, rx + PAD, sevY);
+      rx += C3; this.vline(rx, this.y, this.y + rowH, T.border, 0.25);
 
       // Description
-      const dsPad = (ROW_H - descLS.length * LH) / 2;
-      let dY = this.y + dsPad + LH * 0.72;
-      this.F(12, "normal", C.muted);
-      descLS.forEach(l => { this.doc.text(l, rx + PAD_X, dY); dY += LH; });
+      this.setFont(SZ, "normal", T.muted);
+      let dy = this.y + (rowH - descLS.length * lineH) / 2 + lineH * 0.72;
+      descLS.forEach(l => { this.pdf.text(l, rx + PAD, dy); dy += lineH; });
 
-      this.y += ROW_H;
+      this.y += rowH;
     });
-
-    this.y += px(8);
+    this.y += px(4);
   }
 
-  // ═════════════════════════════════════════════════════════════════════════//
-  //  RECOMMENDATIONS  (three vertical cards: #FAFAFA, 1px border, 8px radius)
-  // ═════════════════════════════════════════════════════════════════════════//
+  // ════════════════════════════════════════════════════════════════════════
+  //  5. IMPACT ASSESSMENT
+  // ════════════════════════════════════════════════════════════════════════
+  drawImpact(sec) {
+    if (!sec || !sec.items.length) return;
+    this.sectionTitle("Impact Assessment");
+    this.drawExecutiveSummary(sec); // reuse compact callout box
+  }
 
-  drawRecommendations(section) {
-    const groups = {
-      immediate: { label: "Immediate Actions",             items: [] },
-      short:     { label: "Short-Term Improvements",        items: [] },
-      long:      { label: "Long-Term Preventive Measures",  items: [] },
+  // ════════════════════════════════════════════════════════════════════════
+  //  6. RECOMMENDATIONS
+  //  Subsections: 13px 600 #4F46E5
+  // ════════════════════════════════════════════════════════════════════════
+  drawRecommendations(sec) {
+    if (!sec || !sec.items.length) return;
+    this.sectionTitle("Recommendations");
+
+    const GROUPS = {
+      immediate: { label: "Immediate Actions",            items: [] },
+      short:     { label: "Short-Term Improvements",       items: [] },
+      long:      { label: "Long-Term Preventive Measures", items: [] },
     };
     let cur = null;
-    section.items.forEach(item => {
-      if (item.type === "subhead") {
-        const t = item.text.toLowerCase();
-        cur = t.includes("immediate") ? groups.immediate
-            : t.includes("short")    ? groups.short
-            : t.includes("long")     ? groups.long : null;
-      } else if (cur && item.text) {
-        cur.items.push(item.text);
+    sec.items.forEach(it => {
+      if (it.type === "subhead") {
+        const t = it.text.toLowerCase();
+        cur = t.includes("immediate") ? GROUPS.immediate
+            : t.includes("short")    ? GROUPS.short
+            : t.includes("long")     ? GROUPS.long : null;
+      } else if (cur && it.text) {
+        cur.items.push(it.text);
       }
     });
 
-    const populated = Object.values(groups).filter(g => g.items.length > 0);
+    const populated = Object.values(GROUPS).filter(g => g.items.length > 0);
+
     if (populated.length === 0) {
-      section.items.forEach(it => {
-        if (it.type === "bullet" || it.type === "ordered") this.drawBullet(it.text);
-        else if (it.type === "para") this.drawPara(it.text);
+      sec.items.forEach(it => {
+        if (it.type === "bullet" || it.type === "ordered") this.bullet(it.text);
+        else if (it.type === "para") this.para(it.text);
       });
       return;
     }
 
-    const CARD_PAD   = px(16);
-    const CARD_RAD   = px(6);
-    const TITLE_LH   = this.lh(11, 1.4);
-    const BUL_LH     = this.lh(12, 1.55);
-    const CARD_GAP   = px(10);
-
     populated.forEach((grp, gi) => {
-      if (gi > 0) this.y += CARD_GAP;
+      if (gi > 0) this.y += px(12) * this.scale; // 12px spacing between subsections
 
-      // Estimate card height
-      let estH = CARD_PAD + TITLE_LH + px(4) + px(0.5) + px(6);
-      grp.items.forEach(it => {
-        const ls = this.split(it, this.cW - px(28) - CARD_PAD * 2, 12);
-        estH += ls.length * BUL_LH + px(2);
-      });
-      estH += CARD_PAD;
+      const titleH = this.lh(13, 1.4) + px(4);
+      const bulkH  = grp.items.reduce((a, t) => {
+        return a + Math.max(1, this.wrap(t, this.cW - px(18), 12).length) * this.lh(12, 1.55) + px(2);
+      }, 0);
+      this.need(titleH + bulkH);
 
-      this.need(estH + px(4));
+      // Requirement 6: font-size: 13px, font-weight: 600 (bold), color: #4F46E5
+      this.setFont(13, "bold", T.accent);
+      this.pdf.text(grp.label, this.mL, this.y);
+      this.y += this.lh(13, 1.4);
 
-      const cy = this.y;
-      this.rect(this.mL, cy, this.cW, estH, C.bgAlt, C.border, 0.2, CARD_RAD);
+      // Divider under subsection
+      this.hline(this.y + px(1), T.border, 0.2);
+      this.y += px(6) * this.scale;
 
-      this.y = cy + CARD_PAD;
-
-      // Card title (10px, bold, accent)
-      this.F(11, "bold", C.accent);
-      this.doc.text(grp.label.toUpperCase(), this.mL + CARD_PAD, this.y);
-      this.y += TITLE_LH;
-
-      // Thin divider below title
-      this.y += px(4);
-      this.hline(this.y, C.border, 0.2,
-        this.mL + CARD_PAD, this.W - this.mR - CARD_PAD);
-      this.y += px(6);
-
-      // Bullet items
-      grp.items.forEach(item => {
-        const ind = px(14);
-        const ls  = this.split(item, this.cW - CARD_PAD * 2 - ind, 12);
-        this.F(12, "normal", C.muted);
-        this.doc.text("•", this.mL + CARD_PAD + px(4), this.y);
-        this.F(12, "normal", C.text);
-        ls.forEach(l => { this.doc.text(l, this.mL + CARD_PAD + ind, this.y); this.y += BUL_LH; });
-        this.y += px(2);
-      });
-
-      // Advance to bottom of card
-      this.y = cy + estH + 0;
+      grp.items.forEach(item => this.bullet(item));
     });
-
-    this.y += px(6);
   }
 
-  // ═════════════════════════════════════════════════════════════════════════//
-  //  COMMANDS  (compact mono block, 11px, 10px padding, 6px radius)
-  // ═════════════════════════════════════════════════════════════════════════//
+  // ════════════════════════════════════════════════════════════════════════
+  //  7. RECOMMENDED COMMANDS (Code Block)
+  //  bg: #F8FAFC, border: 1px solid #E5E7EB, padding: 12px, font: 11px mono
+  // ════════════════════════════════════════════════════════════════════════
+  drawCommands(sec) {
+    if (!sec || !sec.items.length) return;
+    const rawLines = [];
+    sec.items.forEach(it => {
+      if (it.type === "code") it.lines.forEach(l => rawLines.push(l));
+    });
+    if (!rawLines.length) return;
 
-  drawCodeLines(rawLines) {
-    const clean = rawLines.map(l => l.trim().replace(/^\$\s+/, "")).filter(Boolean);
-    if (clean.length === 0) return;
+    this.sectionTitle("Recommended Commands");
 
-    const PAD  = px(10);
-    const PT   = 11 * 0.75;   // 11px → pt
-    const LH   = PT * 0.3528 * 1.4;
-    const maxW = this.cW - PAD * 2;
+    const cmds = rawLines.map(l => l.trim().replace(/^\$\s*/, "")).filter(Boolean);
+    if (!cmds.length) return;
 
-    const blocks = clean.map(cmd => {
-      this.doc.setFont("courier", "normal");
-      this.doc.setFontSize(PT);
-      return this.doc.splitTextToSize(cmd, maxW);
+    const SZ_PX = 11;
+    const SZ_PT = fpt(SZ_PX);
+    const lineH = SZ_PT * 0.3528 * 1.4;
+    const PAD   = px(12); // 12px padding
+    const mW    = this.cW - PAD * 2;
+
+    const blocks = cmds.map(cmd => {
+      this.pdf.setFont("courier", "normal");
+      this.pdf.setFontSize(SZ_PT);
+      return this.pdf.splitTextToSize(cmd, mW);
     });
 
-    const totalLines = blocks.reduce((s, b) => s + b.length, 0);
-    const gapH = (blocks.length - 1) * px(5);
-    const boxH = totalLines * LH + gapH + PAD * 2;
+    const totalLn = blocks.reduce((s, b) => s + b.length, 0);
+    const gaps    = (blocks.length - 1) * px(4);
+    const boxH    = totalLn * lineH + gaps + PAD * 2;
 
     this.need(boxH + px(4));
-    this.rect(this.mL, this.y, this.cW, boxH, C.bgLight, C.border, 0.2, px(6));
+    this.fillRect(this.mL, this.y, this.cW, boxH, T.bgHdr, T.border, 0.25, px(6));
 
-    this.doc.setFont("courier", "normal");
-    this.doc.setFontSize(PT);
-    this.tc(...C.text);
+    this.pdf.setFont("courier", "normal");
+    this.pdf.setFontSize(SZ_PT);
+    this.tc(...T.text);
 
-    let ty = this.y + PAD + LH * 0.72;
+    let ty = this.y + PAD + lineH * 0.72;
     blocks.forEach((ls, ci) => {
-      if (ci > 0) ty += px(5);
-      ls.forEach(l => { this.doc.text(l, this.mL + PAD, ty); ty += LH; });
+      if (ci > 0) ty += px(4);
+      ls.forEach(l => { this.pdf.text(l, this.mL + PAD, ty); ty += lineH; });
     });
 
-    this.y += boxH + px(8);
+    this.y += boxH + px(4);
   }
 
-  drawCommandSection(section) {
-    const cmds = [];
-    section.items.forEach(item => {
-      if (item.type === "code") {
-        item.lines.forEach(l => { const cl = l.trim().replace(/^\$\s+/, ""); if (cl) cmds.push(cl); });
-      } else if (item.type === "subhead") {
-        this.drawSubhead(item.text);
-      } else if (item.type === "para") {
-        this.drawPara(item.text);
-      }
-    });
-    if (cmds.length > 0) this.drawCodeLines(cmds);
-  }
+  // ════════════════════════════════════════════════════════════════════════
+  //  8. AI GENERATION METADATA (4 Equal Cards in a Row)
+  //  min-height: 60px (~16mm), padding: 12px, bg: #FAFAFA, border: 1px solid #E5E7EB
+  // ════════════════════════════════════════════════════════════════════════
+  drawMeta(meta) {
+    this.sectionTitle("AI Generation Metadata");
 
-  // ═════════════════════════════════════════════════════════════════════════//
-  //  AI METADATA  (4 equal cards: #FAFAFA bg, 1px border, 8px radius, 70px)
-  // ═════════════════════════════════════════════════════════════════════════//
-
-  drawMetadataCards(meta) {
     const dt = fmtDate(meta.generatedAt);
     const cards = [
       { label: "Model",           value: meta.model || "—" },
@@ -612,136 +598,117 @@ class PDFReport {
       { label: "Generated At",    value: dt.date },
     ];
 
-    const GAP   = px(8);
-    const cardW = (this.cW - GAP * 3) / 4;
-    const cardH = px(64);   // ~70px visual
+    const GAP   = px(6);
+    const cW    = (this.cW - GAP * 3) / 4;
+    const cH    = px(60); // 60px height requirement
     const r     = px(6);
 
-    this.need(cardH + px(8));
+    this.need(cH + px(4));
 
     cards.forEach((card, i) => {
-      const cx = this.mL + i * (cardW + GAP);
-      this.rect(cx, this.y, cardW, cardH, C.bgAlt, C.border, 0.2, r);
+      const cx = this.mL + i * (cW + GAP);
+      this.fillRect(cx, this.y, cW, cH, T.bg, T.border, 0.25, r);
 
-      // Label
-      this.F(10, "bold", C.muted);
-      this.doc.text(card.label.toUpperCase(), cx + px(12), this.y + px(18));
+      // Padding 12px
+      this.setFont(10, "bold", T.muted);
+      this.pdf.text(card.label.toUpperCase(), cx + px(12), this.y + px(16));
 
-      // Value
-      const ls = this.split(card.value, cardW - px(24), 12, "bold");
-      this.F(12, "bold", C.text);
-      let vy = this.y + px(34);
-      ls.slice(0, 2).forEach(l => { this.doc.text(l, cx + px(12), vy); vy += this.lh(12, 1.3); });
+      const ls = this.wrap(card.value, cW - px(24), 12, "bold");
+      this.setFont(12, "bold", T.text);
+      let vy = this.y + px(32);
+      ls.slice(0, 2).forEach(l => { this.pdf.text(l, cx + px(12), vy); vy += this.lh(12, 1.2); });
     });
 
-    this.y += cardH + px(8);
+    this.y += cH + px(4);
   }
 
-  // ═════════════════════════════════════════════════════════════════════════//
-  //  FOOTER  (fixed to page bottom, thin grey divider, 10px text)
-  // ═════════════════════════════════════════════════════════════════════════//
-
+  // ════════════════════════════════════════════════════════════════════════
+  //  9. FOOTER (Strict bottom alignment, display:flex simulation, no overlaps)
+  // ════════════════════════════════════════════════════════════════════════
   stampFooters() {
-    const total = this.doc.internal.getNumberOfPages();
+    const total = this.pdf.internal.getNumberOfPages();
     for (let p = 1; p <= total; p++) {
-      this.doc.setPage(p);
+      this.pdf.setPage(p);
 
-      const fy = this.H - this.mB - this.footH;
+      const fy = this.H - this.mB - this.fH + px(12); // padding-top: 12px
 
-      // Separator
-      this.hline(fy, C.border, 0.2);
+      // Thin divider line above footer
+      this.hline(fy, T.border, 0.25);
 
-      // Line 1 — brand name + platform
-      this.F(10, "bold", C.muted);
-      this.doc.text("KubeSage AI", this.mL, fy + px(14));
-      this.F(10, "normal", C.muted);
-      this.doc.text("  ·  AI-Powered Kubernetes Investigation Platform",
-        this.mL + px(4), fy + px(14));
+      const l1 = fy + px(14);
+      const l2 = fy + px(28);
 
-      // Line 2 — confidential notice (left) + page number (right)
-      this.F(9, "italic", C.muted);
-      this.doc.text(
-        "Confidential – Generated for internal SRE investigation purposes.",
-        this.mL, fy + px(28)
-      );
-      this.F(9, "bold", C.muted);
-      this.doc.text(`Page ${p} of ${total}`, this.W - this.mR, fy + px(28), { align: "right" });
+      // Left-aligned Brand + Platform
+      this.setFont(10, "bold", T.muted);
+      this.pdf.text("KubeSage AI", this.mL, l1);
+
+      this.setFont(10, "normal", T.muted);
+      this.pdf.text("  ·  AI-Powered Kubernetes Investigation Platform", this.mL + px(24), l1);
+
+      // Left-aligned Confidentiality Notice
+      this.setFont(9, "italic", T.muted);
+      this.pdf.text("Confidential \u2013 Generated for internal SRE investigation purposes.", this.mL, l2);
+
+      // Right-aligned Page Number (aligned with Line 2 to eliminate collisions)
+      this.setFont(10, "bold", T.muted);
+      this.pdf.text(`Page ${p} of ${total}`, this.W - this.mR, l2, { align: "right" });
     }
   }
 
-  // ═════════════════════════════════════════════════════════════════════════//
-  //  RENDER
-  // ═════════════════════════════════════════════════════════════════════════//
-
+  // ════════════════════════════════════════════════════════════════════════
+  //  RENDER (Strict Order Execution)
+  //  1. Header
+  //  2. Executive Summary
+  //  3. Investigation Overview
+  //  4. Findings
+  //  5. Impact Assessment
+  //  6. Recommendations
+  //  7. Recommended Commands
+  //  8. AI Generation Metadata
+  // ════════════════════════════════════════════════════════════════════════
   render(meta, markdownContent) {
     this.y = this.mT;
+    const secMap = parseMarkdown(markdownContent);
 
+    // 1. Header
     this.drawHeader(meta);
+
+    // 2. Executive Summary
+    this.drawExecutiveSummary(secMap["summary"]);
+
+    // 3. Investigation Overview
     this.drawOverview(meta);
 
-    const sections = parseMarkdown(markdownContent);
+    // 4. Findings
+    this.drawFindings(meta.issues);
 
-    sections.forEach(sec => {
-      const tl = sec.title.toLowerCase();
+    // 5. Impact Assessment
+    this.drawImpact(secMap["impact"]);
 
-      if (tl === "executive summary") {
-        this.drawSectionTitle("Executive Summary");
-        this.drawBox(sec.items);
+    // 6. Recommendations
+    this.drawRecommendations(secMap["recommendations"]);
 
-      } else if (tl === "findings") {
-        this.need(px(50));
-        this.drawSectionTitle("Findings");
-        this.drawFindingsTable(meta.issues);
+    // 7. Recommended Commands
+    this.drawCommands(secMap["commands"]);
 
-      } else if (tl === "impact assessment") {
-        this.drawSectionTitle("Impact Assessment");
-        this.drawBox(sec.items);
+    // 8. AI Generation Metadata
+    this.drawMeta(meta);
 
-      } else if (tl === "recommendations") {
-        this.need(px(60));
-        this.drawSectionTitle("Recommendations");
-        this.drawRecommendations(sec);
-
-      } else if (tl.includes("command") || tl.includes("diagnostic")) {
-        this.need(px(40));
-        this.drawSectionTitle("Recommended Commands");
-        this.drawCommandSection(sec);
-
-      } else {
-        this.need(px(30));
-        this.drawSectionTitle(sec.title);
-        sec.items.forEach(item => {
-          if (item.type === "para")    this.drawPara(item.text);
-          else if (item.type === "bullet" || item.type === "ordered") this.drawBullet(item.text);
-          else if (item.type === "subhead") this.drawSubhead(item.text);
-          else if (item.type === "code") this.drawCodeLines(item.lines);
-        });
-      }
-    });
-
-    // AI Metadata
-    this.need(px(20) + px(20) + px(64) + px(12));
-    this.drawSectionTitle("AI Generation Metadata");
-    this.drawMetadataCards(meta);
-
+    // 9. Footer
     this.stampFooters();
-    return this.doc;
+
+    return this.pdf;
   }
 }
 
-// ═══════════════════════════════════════════════════════════════════════════ //
-//  Public API
-// ═══════════════════════════════════════════════════════════════════════════ //
+// ─────────────────────────────────────────────────────────────────────────────
+//  Public API & Pre-Render Layout Validation Pass
+// ─────────────────────────────────────────────────────────────────────────────
 
 export const copyReport = async (reportData) => {
   if (!reportData) return false;
-  try {
-    await navigator.clipboard.writeText(reportData);
-    return true;
-  } catch (err) {
-    console.error("copyReport:", err);
-    return false;
-  }
+  try { await navigator.clipboard.writeText(reportData); return true; }
+  catch (err) { console.error("copyReport:", err); return false; }
 };
 
 export const exportMarkdown = (reportData, investigationId) => {
@@ -749,7 +716,9 @@ export const exportMarkdown = (reportData, investigationId) => {
   const pad  = String(investigationId).padStart(5, "0");
   const blob = new Blob([reportData], { type: "text/markdown;charset=utf-8;" });
   const url  = URL.createObjectURL(blob);
-  const a    = Object.assign(document.createElement("a"), { href: url, download: `Investigation_INV-${pad}.md` });
+  const a    = Object.assign(document.createElement("a"), {
+    href: url, download: `Investigation_INV-${pad}.md`,
+  });
   document.body.appendChild(a); a.click(); document.body.removeChild(a);
   URL.revokeObjectURL(url);
 };
@@ -761,12 +730,33 @@ export const exportPDF = async (params) => {
       status, model, tokens, duration, generatedAt, findings, issues,
     } = params;
 
-    const meta = { investigationId, clusterName, status, model, tokens, duration, generatedAt, findings, issues };
+    const meta = {
+      investigationId, clusterName, status,
+      model, tokens, duration, generatedAt, findings, issues,
+    };
 
-    const report = new PDFReport();
-    const pdf    = report.render(meta, markdownContent);
-    const pad    = String(investigationId).padStart(5, "0");
-    pdf.save(`KubeSage_AI_Report_INV-${pad}.pdf`);
+    // ── Pre-Render Layout Validation Pass ──────────────────────────────────
+    // 1. Render test pass to detect page count and orphan overflow
+    const testDoc = new Doc(1.0);
+    testDoc.render(meta, markdownContent);
+    const pages = testDoc.pdf.internal.getNumberOfPages();
+
+    // 2. Determine optimal spacing scale factor to eliminate accidental page 2 spills
+    let optimalScale = 1.0;
+    if (pages > 1) {
+      // If the content spilled onto page 2 by just a small margin, compress spacing slightly (0.85 scale)
+      const testDoc2 = new Doc(0.85);
+      testDoc2.render(meta, markdownContent);
+      if (testDoc2.pdf.internal.getNumberOfPages() === 1) {
+        optimalScale = 0.85;
+      }
+    }
+
+    // ── Final Production Render ───────────────────────────────────────────
+    const finalDoc = new Doc(optimalScale);
+    const pdf = finalDoc.render(meta, markdownContent);
+    const pad = String(investigationId).padStart(5, "0");
+    pdf.save(`KubeSage_AI_Report_INV-${pad}.pad.pdf`.replace(".pad.pdf", ".pdf"));
     return true;
   } catch (err) {
     console.error("exportPDF:", err);
