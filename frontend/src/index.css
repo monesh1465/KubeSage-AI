@@ -193,17 +193,19 @@ a:focus-visible {
   align-items: center;
   gap: 0.625rem;
   margin-bottom: 2.5rem;
+  transform: scale(1.05);
+  transform-origin: left center;
 }
 
 .hero-logo-badge {
   display: flex;
   align-items: center;
   justify-content: center;
-  width: 2.5rem;
-  height: 2.5rem;
-  border-radius: 10px;
+  width: 2.875rem;
+  height: 2.875rem;
+  border-radius: 12px;
   background: linear-gradient(135deg, #6366f1 0%, #4f46e5 100%);
-  box-shadow: 0 0 20px rgba(99,102,241,0.45);
+  box-shadow: 0 0 24px rgba(99,102,241,0.5);
   flex-shrink: 0;
 }
 
@@ -214,8 +216,8 @@ a:focus-visible {
 }
 
 .hero-logo-icon {
-  width: 1.1rem;
-  height: 1.1rem;
+  width: 1.3rem;
+  height: 1.3rem;
   color: #fff;
   animation: pulse-soft 2.4s ease-in-out infinite;
 }
@@ -226,7 +228,7 @@ a:focus-visible {
 }
 
 .hero-logo-text {
-  font-size: 1.25rem;
+  font-size: 1.3rem;
   font-weight: 900;
   letter-spacing: -0.03em;
   color: #f4f4f5;
@@ -248,7 +250,7 @@ a:focus-visible {
   letter-spacing: -0.04em;
   line-height: 1.15;
   color: #f4f4f5;
-  margin: 0 0 1rem;
+  margin: 0 0 1.75rem;
 }
 
 .hero-headline--accent {
@@ -262,8 +264,17 @@ a:focus-visible {
   font-size: 0.875rem;
   line-height: 1.65;
   color: #a1a1aa;
-  margin: 0 0 1.75rem;
+  margin: 0 0 0.75rem;
   max-width: 400px;
+}
+
+.hero-credibility {
+  font-size: 0.8rem;
+  font-weight: 600;
+  color: #818cf8;
+  margin: 0 0 24px;
+  max-width: 400px;
+  letter-spacing: -0.01em;
 }
 
 /* Trust badges */
@@ -293,6 +304,11 @@ a:focus-visible {
 }
 
 /* ── Telemetry Card ── */
+@keyframes float {
+  0%, 100% { transform: translateY(0px); }
+  50%       { transform: translateY(-6px); }
+}
+
 .telemetry-card {
   border-radius: 14px;
   border: 1px solid rgba(255,255,255,0.07);
@@ -304,6 +320,7 @@ a:focus-visible {
   display: flex;
   flex-direction: column;
   gap: 0.875rem;
+  animation: float 7s ease-in-out infinite;
 }
 
 .telemetry-header {
@@ -513,7 +530,17 @@ a:focus-visible {
 }
 
 /* Form card */
-.form-card { width: 100%; max-width: 380px; }
+.form-card {
+  width: 100%;
+  max-width: 420px;
+  background: rgba(15, 15, 25, 0.88);
+  border: 1px solid rgba(255,255,255,0.08);
+  border-radius: 18px;
+  backdrop-filter: blur(18px);
+  -webkit-backdrop-filter: blur(18px);
+  padding: 2rem;
+  box-shadow: 0 8px 40px rgba(0,0,0,0.4);
+}
 .form-card-inner { display: flex; flex-direction: column; gap: 0; }
 
 .form-heading { margin-bottom: 1.5rem; }
@@ -571,9 +598,9 @@ a:focus-visible {
 .field-input::placeholder { color: #3f3f46; }
 
 .field-input:focus {
-  border-color: rgba(99,102,241,0.6);
-  background: rgba(30,27,75,0.25);
-  box-shadow: 0 0 0 3px rgba(99,102,241,0.12);
+  border-color: #7c6cff;
+  background: rgba(30,27,75,0.3);
+  box-shadow: 0 0 0 3px rgba(124,108,255,.15);
 }
 
 .field-wrapper:focus-within .field-icon { color: #818cf8; }
@@ -658,3 +685,15 @@ a:focus-visible {
 
 .form-security-icon { width: 0.75rem; height: 0.75rem; }
 
+/* Login page footer */
+.login-page-footer {
+  margin-top: 2rem;
+  text-align: center;
+  font-size: 12px;
+  color: rgba(255,255,255,0.45);
+  line-height: 1.7;
+}
+
+.login-page-footer span {
+  display: block;
+}

@@ -11,14 +11,19 @@ import {
   FiActivity,
   FiCpu,
   FiTerminal,
+  FiDownload,
+  FiFileText,
+  FiRefreshCw,
 } from "react-icons/fi";
 import PageSkeleton from "../components/PageSkeleton";
 import StatusBadge from "../components/StatusBadge";
 import EmptyState from "../components/EmptyState";
 import { getLatestAIAnalysis } from "../services/aiService";
 import { getInvestigationById } from "../services/investigationService";
+import { copyReport, exportMarkdown, exportPDF } from "../services/reportExportService";
 import { getApiErrorMessage } from "../utils/errors";
 import { parseIssues } from "../utils/parseIssues";
+import { useToast } from "../context/ToastContext";
 
 // ── Helpers ──────────────────────────────────────────────────────────────── //
 
@@ -180,6 +185,7 @@ const markdownComponents = {
 
 function AIReport() {
   const { investigationId } = useParams();
+  const toast = useToast();
 
   const [analysis, setAnalysis] = useState(null);
   const [investigation, setInvestigation] = useState(null);
@@ -187,6 +193,7 @@ function AIReport() {
   const [error, setError] = useState("");
   const [copied, setCopied] = useState(false);
   const [copiedCmds, setCopiedCmds] = useState(false);
+  const [pdfLoading, setPdfLoading] = useState(false);
 
   useEffect(() => {
     if (!investigationId) return;
@@ -216,11 +223,57 @@ function AIReport() {
     return () => { cancelled = true; };
   }, [investigationId]);
 
-  const handleCopy = () => {
+  const handleCopy = async () => {
     if (analysis?.analysis) {
-      navigator.clipboard?.writeText(analysis.analysis).catch(() => {});
+      await copyReport(analysis.analysis);
       setCopied(true);
+      toast.success("AI report copied successfully.");
       setTimeout(() => setCopied(false), 2000);
+    }
+  };
+
+  const handleDownloadMarkdown = () => {
+    exportMarkdown(analysis?.analysis, investigationId);
+  };
+
+  const handleExportPDF = async () => {
+    if (pdfLoading) return;
+    setPdfLoading(true);
+    try {
+      // Build findings summary from investigation data
+      const issues = parseIssues(investigation?.issues);
+      const namespaces = Array.from(new Set(issues.map(i => i.namespace).filter(ns => ns && ns !== "-")));
+      const counts = issues.reduce((acc, issue) => { acc[issue.type] = (acc[issue.type] || 0) + 1; return acc; }, {});
+      let mostCommon = "None";
+      let maxCount = 0;
+      for (const [type, count] of Object.entries(counts)) { if (count > maxCount) { maxCount = count; mostCommon = type; } }
+      const highCount = issues.filter(i => i.severity === "High").length;
+
+      const totalTokens = (analysis.prompt_tokens ?? 0) + (analysis.completion_tokens ?? 0);
+
+      await exportPDF({
+        markdownContent: analysis.analysis,
+        investigationId,
+        clusterName: investigation?.cluster_name || "minikube",
+        status: investigation?.cluster_status || "Unknown",
+        model: analysis.model || "gemma4:31b-cloud",
+        tokens: totalTokens,
+        duration: analysis.duration_seconds,
+        generatedAt: analysis.generated_at || analysis.created_at,
+        issues,
+        findings: {
+          issueCount: issues.length,
+          namespace: namespaces.join(", ") || "None",
+          mostCommon,
+          severity: highCount > 0 ? "Critical" : "Normal",
+        },
+      });
+      toast.success("AI Investigation Report downloaded successfully.");
+    } catch (err) {
+      console.error(err);
+      toast.error("Failed to generate PDF.");
+    } finally {
+      setPdfLoading(false);
     }
   };
 
@@ -293,28 +346,57 @@ function AIReport() {
         <span className="text-[var(--color-text)]">AI Report</span>
       </div>
 
+      <div id="ai-report-container" className="space-y-5 p-1">
       {/* Header */}
       <div className="rounded-xl border border-[var(--color-border)] bg-[var(--color-card)] p-5 shadow-sm">
         <div className="flex flex-wrap items-start justify-between gap-4">
           <div>
-            <p className="text-[10px] font-bold uppercase tracking-widest text-[var(--color-secondary)]">
-              KubeSage AI Analysis
-            </p>
+            <div className="flex items-center gap-2">
+              <FiActivity className="h-4 w-4 text-[var(--color-primary)]" />
+              <p className="text-[10px] font-bold uppercase tracking-widest text-[var(--color-secondary)]">
+                KubeSage AI Analysis
+              </p>
+            </div>
             <h1 className="mt-1 text-lg font-bold text-[var(--color-text)]">
-              AI Analysis Report
+              AI Investigation Report
             </h1>
             <p className="text-xs text-[var(--color-secondary)] mt-0.5">
               Model: {analysis.model || "gemma4:31b-cloud"}
             </p>
           </div>
-          <button
-            type="button"
-            onClick={handleCopy}
-            className="inline-flex items-center gap-1.5 rounded-lg border border-[var(--color-border)] px-3 py-1.5 text-xs font-semibold text-[var(--color-secondary)] transition-colors hover:text-[var(--color-text)] hover:bg-[var(--color-bg)]"
-          >
-            {copied ? <FiCheck className="h-3.5 w-3.5 text-[var(--color-success)]" /> : <FiCopy className="h-3.5 w-3.5" />}
-            {copied ? "Copied" : "Copy Report"}
-          </button>
+          
+          <div className="flex flex-col items-end gap-2">
+            <span className="text-[10px] font-bold uppercase tracking-widest text-[var(--color-secondary)]">
+              Actions
+            </span>
+            <div className="flex items-center gap-2">
+              <button
+                type="button"
+                onClick={handleCopy}
+                className="inline-flex items-center gap-1.5 rounded border border-[var(--color-border)] px-2.5 py-1 text-xs font-semibold text-[var(--color-secondary)] transition-colors hover:text-[var(--color-text)] hover:bg-[var(--color-bg)]"
+              >
+                {copied ? <FiCheck className="h-3.5 w-3.5 text-[var(--color-success)]" /> : <FiCopy className="h-3.5 w-3.5" />}
+                {copied ? "Copied" : "Copy"}
+              </button>
+              <button
+                type="button"
+                onClick={handleDownloadMarkdown}
+                className="inline-flex items-center gap-1.5 rounded border border-[var(--color-border)] px-2.5 py-1 text-xs font-semibold text-[var(--color-secondary)] transition-colors hover:text-[var(--color-text)] hover:bg-[var(--color-bg)]"
+              >
+                <FiDownload className="h-3.5 w-3.5" />
+                Markdown
+              </button>
+              <button
+                type="button"
+                onClick={handleExportPDF}
+                disabled={pdfLoading}
+                className="inline-flex items-center gap-1.5 rounded border border-[var(--color-border)] bg-[var(--color-primary)]/10 text-[var(--color-primary)] px-2.5 py-1 text-xs font-semibold transition-colors hover:bg-[var(--color-primary)] hover:text-white disabled:opacity-60"
+              >
+                {pdfLoading ? <FiRefreshCw className="h-3.5 w-3.5 animate-spin" /> : <FiDownload className="h-3.5 w-3.5" />}
+                {pdfLoading ? "Generating..." : "Download PDF"}
+              </button>
+            </div>
+          </div>
         </div>
 
         {/* Metadata grid - Equal columns in a single row */}
@@ -438,6 +520,7 @@ function AIReport() {
             </div>
           ))}
         </div>
+      </div>
       </div>
 
       {/* Bottom navigation */}

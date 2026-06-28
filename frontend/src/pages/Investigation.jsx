@@ -20,6 +20,7 @@ import { getLatestAIAnalysis, generateAIAnalysis } from "../services/aiService";
 import { getApiErrorMessage } from "../utils/errors";
 import { parseIssues } from "../utils/parseIssues";
 import { useToast } from "../context/ToastContext";
+import { copyReport, exportPDF } from "../services/reportExportService";
 
 // ── Helpers ──────────────────────────────────────────────────────────────── //
 
@@ -151,6 +152,7 @@ function Investigation() {
   const [aiAnalysis, setAiAnalysis] = useState(null);
   const [generatingAI, setGeneratingAI] = useState(false);
   const [copiedAllCmds, setCopiedAllCmds] = useState(false);
+  const [pdfLoading, setPdfLoading] = useState(false);
 
   // Load investigation
   useEffect(() => {
@@ -201,6 +203,39 @@ function Investigation() {
     } catch (err) {
       toast.error(getApiErrorMessage(err, "Failed to generate AI analysis."));
       setGeneratingAI(false);
+    }
+  };
+
+  const handleExportPDF = async () => {
+    if (pdfLoading || !aiAnalysis || !result) return;
+    setPdfLoading(true);
+    try {
+      const namespaces = Array.from(new Set(issues.map(i => i.namespace).filter(ns => ns && ns !== "-")));
+      const totalTokens = (aiAnalysis.prompt_tokens ?? 0) + (aiAnalysis.completion_tokens ?? 0);
+
+      await exportPDF({
+        markdownContent: aiAnalysis.analysis,
+        investigationId: result.id,
+        clusterName: result.cluster_name || "minikube",
+        status: result.cluster_status || "Unknown",
+        model: aiAnalysis.model || "gemma4:31b-cloud",
+        tokens: totalTokens,
+        duration: aiAnalysis.duration_seconds,
+        generatedAt: aiAnalysis.generated_at || aiAnalysis.created_at,
+        issues,
+        findings: {
+          issueCount: issues.length,
+          namespace: namespaces.join(", ") || "None",
+          mostCommon,
+          severity: highCount > 0 ? "Critical" : "Normal",
+        },
+      });
+      toast.success("AI Investigation Report downloaded successfully.");
+    } catch (err) {
+      console.error(err);
+      toast.error("Failed to generate PDF.");
+    } finally {
+      setPdfLoading(false);
     }
   };
 
@@ -463,13 +498,45 @@ function Investigation() {
                 </div>
               </div>
             </div>
-            <Link
-              to={`/investigations/${result.id}/ai`}
-              className="inline-flex items-center gap-1.5 rounded-lg bg-[var(--color-primary)] px-3.5 py-1.5 text-xs font-bold text-white transition-opacity hover:opacity-90"
-            >
-              <FiFileText className="h-3.5 w-3.5" />
-              View AI Report
-            </Link>
+            <div className="flex items-center gap-2">
+              <button
+                type="button"
+                onClick={(e) => {
+                  e.preventDefault();
+                  e.stopPropagation();
+                  copyReport(aiAnalysis?.analysis);
+                  toast.success("AI report copied successfully.");
+                }}
+                className="inline-flex items-center gap-1.5 rounded-lg border border-[var(--color-border)] px-3 py-1.5 text-xs font-semibold text-[var(--color-secondary)] transition-colors hover:text-[var(--color-text)] hover:bg-[var(--color-bg)]"
+              >
+                <FiCopy className="h-3.5 w-3.5" />
+                Copy Report
+              </button>
+              <button
+                type="button"
+                onClick={(e) => {
+                  e.preventDefault();
+                  e.stopPropagation();
+                  handleExportPDF();
+                }}
+                disabled={pdfLoading}
+                className="inline-flex items-center gap-1.5 rounded-lg border border-[var(--color-border)] px-3 py-1.5 text-xs font-semibold text-[var(--color-secondary)] transition-colors hover:text-[var(--color-text)] hover:bg-[var(--color-bg)] disabled:opacity-60"
+              >
+                {pdfLoading ? (
+                  <FiRefreshCw className="h-3.5 w-3.5 animate-spin" />
+                ) : (
+                  <FiFileText className="h-3.5 w-3.5" />
+                )}
+                {pdfLoading ? "Generating..." : "Export PDF"}
+              </button>
+              <Link
+                to={`/investigations/${result.id}/ai`}
+                className="inline-flex items-center gap-1.5 rounded-lg bg-[var(--color-primary)] px-3.5 py-1.5 text-xs font-bold text-white transition-opacity hover:opacity-90"
+              >
+                <FiFileText className="h-3.5 w-3.5" />
+                View AI Report
+              </Link>
+            </div>
           </div>
         </div>
       ) : (

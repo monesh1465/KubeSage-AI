@@ -20,9 +20,9 @@ import { getApiErrorMessage } from "../utils/errors";
 
 /* ─────────────── tiny static trust-badge list ─────────────── */
 const TRUST_ITEMS = [
-  { icon: FiCheckCircle, label: "Multi-cluster Observability" },
-  { icon: FiCheckCircle, label: "AI-Powered Root Cause Analysis" },
-  { icon: FiCheckCircle, label: "Real-time Incident Detection" },
+  { icon: FiCheckCircle, label: "Multi-Cluster Monitoring" },
+  { icon: FiCheckCircle, label: "AI Root Cause Analysis" },
+  { icon: FiCheckCircle, label: "Automated Incident Investigations" },
 ];
 
 function Login() {
@@ -89,6 +89,10 @@ function Login() {
           <p className="hero-sub">
             Connect your clusters, detect incidents in real time, and let AI
             resolve production issues before they escalate.
+          </p>
+
+          <p className="hero-credibility">
+            Built for Kubernetes Operators, DevOps Engineers and SRE Teams.
           </p>
 
           {/* trust badges */}
@@ -233,7 +237,10 @@ function Login() {
                 className="btn-primary-full"
               >
                 {loading ? (
-                  <LoadingSpinner size="sm" />
+                  <>
+                    <LoadingSpinner size="sm" />
+                    <span>Signing In...</span>
+                  </>
                 ) : (
                   <>
                     Sign In
@@ -263,6 +270,12 @@ function Login() {
             </p>
           </div>
         </div>
+
+        {/* Page footer */}
+        <p className="login-page-footer">
+          <span>© 2026 KubeSage AI</span>
+          <span>Built by Monesh R.</span>
+        </p>
       </div>
     </div>
   );
