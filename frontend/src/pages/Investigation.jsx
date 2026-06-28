@@ -20,7 +20,8 @@ import { getLatestAIAnalysis, generateAIAnalysis } from "../services/aiService";
 import { getApiErrorMessage } from "../utils/errors";
 import { parseIssues } from "../utils/parseIssues";
 import { useToast } from "../context/ToastContext";
-import { copyReport, exportPDF } from "../services/reportExportService";
+import { copyReport } from "../services/reportExportService";
+import { generateInvestigationPDF } from "../services/pdf/pdfExportService";
 
 // ── Helpers ──────────────────────────────────────────────────────────────── //
 
@@ -210,26 +211,7 @@ function Investigation() {
     if (pdfLoading || !aiAnalysis || !result) return;
     setPdfLoading(true);
     try {
-      const namespaces = Array.from(new Set(issues.map(i => i.namespace).filter(ns => ns && ns !== "-")));
-      const totalTokens = (aiAnalysis.prompt_tokens ?? 0) + (aiAnalysis.completion_tokens ?? 0);
-
-      await exportPDF({
-        markdownContent: aiAnalysis.analysis,
-        investigationId: result.id,
-        clusterName: result.cluster_name || "minikube",
-        status: result.cluster_status || "Unknown",
-        model: aiAnalysis.model || "gemma4:31b-cloud",
-        tokens: totalTokens,
-        duration: aiAnalysis.duration_seconds,
-        generatedAt: aiAnalysis.generated_at || aiAnalysis.created_at,
-        issues,
-        findings: {
-          issueCount: issues.length,
-          namespace: namespaces.join(", ") || "None",
-          mostCommon,
-          severity: highCount > 0 ? "Critical" : "Normal",
-        },
-      });
+      await generateInvestigationPDF(result, aiAnalysis);
       toast.success("AI Investigation Report downloaded successfully.");
     } catch (err) {
       console.error(err);

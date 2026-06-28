@@ -18,3 +18,5 @@ class InvestigationResponse(BaseModel):
     started_at: datetime | None = None
     completed_at: datetime | None = None
     duration_seconds: float | None = None
+    cluster_id: int | None = None
+    cluster_name: str | None = None

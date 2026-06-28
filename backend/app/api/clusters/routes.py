@@ -414,5 +414,7 @@ def get_investigation_by_id(
         "started_at": run.started_at if run else None,
         "completed_at": run.completed_at if run else None,
         "duration_seconds": run.duration_seconds if run else None,
+        "cluster_id": investigation.cluster_id,
+        "cluster_name": cluster.name if cluster else "Unknown Cluster",
     }
 

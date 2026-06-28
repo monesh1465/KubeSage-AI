@@ -20,7 +20,8 @@ import StatusBadge from "../components/StatusBadge";
 import EmptyState from "../components/EmptyState";
 import { getLatestAIAnalysis } from "../services/aiService";
 import { getInvestigationById } from "../services/investigationService";
-import { copyReport, exportMarkdown, exportPDF } from "../services/reportExportService";
+import { copyReport, exportMarkdown } from "../services/reportExportService";
+import { generateInvestigationPDF } from "../services/pdf/pdfExportService";
 import { getApiErrorMessage } from "../utils/errors";
 import { parseIssues } from "../utils/parseIssues";
 import { useToast } from "../context/ToastContext";
@@ -240,34 +241,11 @@ function AIReport() {
     if (pdfLoading) return;
     setPdfLoading(true);
     try {
-      // Build findings summary from investigation data
-      const issues = parseIssues(investigation?.issues);
-      const namespaces = Array.from(new Set(issues.map(i => i.namespace).filter(ns => ns && ns !== "-")));
-      const counts = issues.reduce((acc, issue) => { acc[issue.type] = (acc[issue.type] || 0) + 1; return acc; }, {});
-      let mostCommon = "None";
-      let maxCount = 0;
-      for (const [type, count] of Object.entries(counts)) { if (count > maxCount) { maxCount = count; mostCommon = type; } }
-      const highCount = issues.filter(i => i.severity === "High").length;
-
-      const totalTokens = (analysis.prompt_tokens ?? 0) + (analysis.completion_tokens ?? 0);
-
-      await exportPDF({
-        markdownContent: analysis.analysis,
-        investigationId,
-        clusterName: investigation?.cluster_name || "minikube",
-        status: investigation?.cluster_status || "Unknown",
-        model: analysis.model || "gemma4:31b-cloud",
-        tokens: totalTokens,
-        duration: analysis.duration_seconds,
-        generatedAt: analysis.generated_at || analysis.created_at,
-        issues,
-        findings: {
-          issueCount: issues.length,
-          namespace: namespaces.join(", ") || "None",
-          mostCommon,
-          severity: highCount > 0 ? "Critical" : "Normal",
-        },
-      });
+      const invObj = {
+        ...investigation,
+        id: investigation?.id || Number(investigationId)
+      };
+      await generateInvestigationPDF(invObj, analysis);
       toast.success("AI Investigation Report downloaded successfully.");
     } catch (err) {
       console.error(err);
