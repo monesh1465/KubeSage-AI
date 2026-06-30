@@ -273,8 +273,7 @@ function Login() {
 
         {/* Page footer */}
         <p className="login-page-footer">
-          <span>© 2026 KubeSage AI</span>
-          <span>Built by Monesh R.</span>
+          <span>© 2026 KubeSage.AI</span>
         </p>
       </div>
     </div>
