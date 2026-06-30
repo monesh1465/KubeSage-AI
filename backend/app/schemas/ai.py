@@ -119,3 +119,22 @@ class AIChatResponse(BaseModel):
     completion_tokens: int | None = None
 
 
+# --------------------------------------------------------------------------- #
+#  Global Assistant — no investigation context                                  #
+# --------------------------------------------------------------------------- #
+
+class AIAssistantRequest(BaseModel):
+    """Payload for POST /api/ai/assistant — global DevOps assistant, no investigation context."""
+    message: str = Field(..., description="The user's question.")
+    history: list[ChatHistoryMessage] = Field(
+        default_factory=list,
+        description="Previous turns (oldest first, excluding current message).",
+    )
+
+
+class AIAssistantResponse(BaseModel):
+    """Response from POST /api/ai/assistant."""
+    reply: str = Field(..., description="The AI assistant's response.")
+    model: str = Field(..., description="Model that produced the reply.")
+    prompt_tokens: int | None = None
+    completion_tokens: int | None = None

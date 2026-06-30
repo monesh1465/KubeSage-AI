@@ -1,5 +1,5 @@
 import { useRef, useEffect } from "react";
-import { FiSend, FiCornerDownLeft } from "react-icons/fi";
+import { FiSend } from "react-icons/fi";
 
 /**
  * @param {object} props
@@ -31,12 +31,12 @@ function ChatInput({ value, onChange, onSend, disabled, loading }) {
 
   return (
     <div className="chat-input-area">
-      <div className="chat-input-wrapper">
+      <div className="chat-input-container">
         <textarea
           ref={textareaRef}
           id="chat-input"
           className="chat-input__textarea"
-          placeholder="Ask about this investigation…"
+          placeholder="Ask about this investigation..."
           value={value}
           rows={1}
           onChange={(e) => onChange(e.target.value)}
@@ -45,7 +45,7 @@ function ChatInput({ value, onChange, onSend, disabled, loading }) {
           aria-label="Chat input"
         />
 
-        {/* Send button */}
+        {/* Send button — absolutely positioned inside container */}
         <button
           id="chat-send-btn"
           type="button"
@@ -57,16 +57,10 @@ function ChatInput({ value, onChange, onSend, disabled, loading }) {
           {loading ? (
             <span className="chat-input__send-spinner" />
           ) : (
-            <FiSend className="h-4 w-4" />
+            <FiSend className="h-3.5 w-3.5" />
           )}
         </button>
       </div>
-
-      {/* Hint */}
-      <p className="chat-input__hint">
-        <FiCornerDownLeft className="h-3 w-3 inline mr-1 opacity-60" />
-        <span>Enter to send · Shift + Enter for new line</span>
-      </p>
     </div>
   );
 }

@@ -24,7 +24,7 @@ from app.db.database import get_db
 from app.models.investigation import Investigation
 from app.models.investigation_run import InvestigationRun
 from app.models.cluster import Cluster
-from app.schemas.ai import AIAnalyzeRequest, AIAnalyzeResponse, AIChatRequest, AIChatResponse, ChatHistoryMessage
+from app.schemas.ai import AIAnalyzeRequest, AIAnalyzeResponse, AIChatRequest, AIChatResponse, ChatHistoryMessage, AIAssistantRequest, AIAssistantResponse
 from app.schemas.ai_analysis import AIAnalysisResponse, AIAnalysisHistoryItem
 from app.services.ai_service import ai_service
 from app.services.ai_analysis_service import save_analysis, get_latest, get_history
@@ -377,6 +377,91 @@ def chat_with_investigation(payload: AIChatRequest) -> AIChatResponse:
     )
 
     return AIChatResponse(
+        reply=reply,
+        model=ai_service.model,
+        prompt_tokens=prompt_tokens,
+        completion_tokens=completion_tokens,
+    )
+
+
+
+# --------------------------------------------------------------------------- #
+#  POST /api/ai/assistant  — global DevOps assistant (no investigation ctx)    #
+# --------------------------------------------------------------------------- #
+
+_ASSISTANT_SYSTEM_PROMPT = """\
+You are KubeSage AI, an expert Kubernetes, Docker, Linux, Cloud, and DevOps assistant.
+
+Your guidelines:
+- Respond conversationally and naturally, like an experienced SRE helping a teammate.
+- Keep answers concise and practical. Avoid documentation-style walls of text.
+- Explain concepts clearly first, then provide commands or examples when helpful.
+- Use fenced code blocks for shell commands and config snippets.
+- Do not use emojis.
+- Do not use report-style headers like "## Overview", "## Summary", "## Recommendations".
+
+Domains you cover:
+- Kubernetes (architecture, workloads, networking, storage, RBAC, Helm)
+- Docker and container runtimes
+- Linux (systemd, networking, filesystem, permissions)
+- Cloud platforms (AWS, GCP, Azure)
+- DevOps tools (Terraform, Helm, CI/CD pipelines)
+- Observability (Prometheus, Grafana, OpenTelemetry)
+
+Out-of-scope policy:
+- If the user asks something completely outside these domains (math, essays, general programming unrelated to scripts/configs, current events), respond politely:
+  "I'm KubeSage AI and I'm designed to help with Kubernetes, Docker, Linux, Cloud, and DevOps questions. I may not be the best assistant for topics outside these areas."
+"""
+
+
+@router.post(
+    "/assistant",
+    response_model=AIAssistantResponse,
+    summary="Global Kubernetes and DevOps assistant (no investigation context)",
+    status_code=status.HTTP_200_OK,
+)
+def global_assistant(payload: AIAssistantRequest) -> AIAssistantResponse:
+    """
+    Stateless global DevOps assistant.
+    No investigation context — accepts a message and prior history only.
+    """
+    logger.info(
+        "POST /api/ai/assistant | history_turns=%d",
+        len(payload.history),
+    )
+
+    messages: list[dict] = [{"role": "system", "content": _ASSISTANT_SYSTEM_PROMPT}]
+
+    for turn in payload.history:
+        messages.append({"role": turn.role, "content": turn.content})
+
+    messages.append({"role": "user", "content": payload.message})
+
+    try:
+        response = ollama.chat(
+            model=ai_service.model,
+            messages=messages,
+        )
+    except ollama.ResponseError as exc:
+        logger.error("Ollama ResponseError in /assistant: %s", exc)
+        raise HTTPException(
+            status_code=status.HTTP_503_SERVICE_UNAVAILABLE,
+            detail=f"AI model returned an error: {exc}",
+        ) from exc
+    except Exception as exc:
+        logger.error("Unexpected error in /assistant: %s", exc)
+        raise HTTPException(
+            status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
+            detail=f"Failed to reach AI model. Ensure Ollama is running. Detail: {exc}",
+        ) from exc
+
+    reply: str = response.message.content or ""
+    prompt_tokens: int | None = getattr(response, "prompt_eval_count", None)
+    completion_tokens: int | None = getattr(response, "eval_count", None)
+
+    logger.info("Assistant reply generated | tokens=%s/%s", prompt_tokens, completion_tokens)
+
+    return AIAssistantResponse(
         reply=reply,
         model=ai_service.model,
         prompt_tokens=prompt_tokens,

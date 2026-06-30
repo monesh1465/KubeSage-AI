@@ -8,6 +8,7 @@ import {
   FiLogOut,
   FiX,
   FiFileText,
+  FiMessageSquare,
 } from "react-icons/fi";
 import { useAuth } from "../context/AuthContext";
 
@@ -15,6 +16,7 @@ const navItems = [
   { to: "/dashboard", label: "Dashboard", icon: FiGrid },
   { to: "/clusters", label: "Clusters", icon: FiServer },
   { to: "/investigations", label: "Investigations", icon: FiSearch },
+  { to: "/assistant", label: "AI Assistant", icon: FiMessageSquare },
   { to: "/settings", label: "Settings", icon: FiSettings },
 ];
 
