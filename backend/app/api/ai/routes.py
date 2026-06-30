@@ -24,7 +24,7 @@ from app.db.database import get_db
 from app.models.investigation import Investigation
 from app.models.investigation_run import InvestigationRun
 from app.models.cluster import Cluster
-from app.schemas.ai import AIAnalyzeRequest, AIAnalyzeResponse
+from app.schemas.ai import AIAnalyzeRequest, AIAnalyzeResponse, AIChatRequest, AIChatResponse, ChatHistoryMessage
 from app.schemas.ai_analysis import AIAnalysisResponse, AIAnalysisHistoryItem
 from app.services.ai_service import ai_service
 from app.services.ai_analysis_service import save_analysis, get_latest, get_history
@@ -217,6 +217,170 @@ def analyze_cluster(payload: AIAnalyzeRequest) -> AIAnalyzeResponse:
         completion_tokens=result.get("completion_tokens"),
         duration_seconds=result.get("duration_seconds"),
         generated_at=result.get("generated_at"),
+    )
+
+
+# --------------------------------------------------------------------------- #
+#  POST /api/ai/chat  — conversational context-aware Q&A                        #
+# --------------------------------------------------------------------------- #
+
+_CHAT_SYSTEM_PROMPT = """\
+You are KubeSage AI, an experienced Kubernetes SRE helping a teammate.
+
+Your guidelines:
+- Respond conversationally. Avoid documentation-style or report-style responses.
+- Keep answers concise and practical.
+- Explain concepts first and provide commands only when needed.
+- Limit excessive code blocks. Prefer the flow: Explanation ➔ Commands ➔ Conclusion.
+- For general Kubernetes, Docker, Linux, or Cloud infrastructure questions (e.g. "What is Kubernetes?", "What is a Deployment?", "Explain Services"), answer them normally and connect the explanation back to the current investigation context whenever relevant.
+- Do not use emojis.
+
+Formatting rules:
+- DO NOT use report-style headers like "## Root Cause", "## Recommendations", "## Evidence", "## Findings".
+- Respond in short, clean paragraphs.
+- Keep code blocks clean, wrapped in fenced code blocks:
+  ```bash
+  kubectl get pods
+  ```
+- If the user asks something completely outside SRE/DevOps/Linux/Cloud domains (like essays, maths, general programming in Python/Java unrelated to scripts/configs, current affairs), respond politely:
+  "I'm KubeSage AI and I'm designed to help with Kubernetes troubleshooting, investigations, Docker, Linux, and cloud infrastructure questions. I may not be the best assistant for topics outside these areas."
+"""
+
+
+def _build_context_block(payload: AIChatRequest) -> str:
+    """Build the investigation context block injected into the first user turn."""
+    findings_lines = []
+    if payload.findings:
+        for i, f in enumerate(payload.findings, 1):
+            line = (
+                f"{i}. [{f.get('severity','?')}] {f.get('type','?')} — "
+                f"resource: {f.get('resource','?')}, namespace: {f.get('namespace','-')}"
+            )
+            if f.get('recommendation'):
+                line += f", fix: {f.get('recommendation')}"
+            findings_lines.append(line)
+        findings_text = "\n".join(findings_lines)
+    else:
+        findings_text = "No issues detected."
+
+    commands_text = "\n".join(f"- {c}" for c in payload.commands) if payload.commands else "None"
+
+    counts = payload.issue_counts or {}
+    severity_text = ", ".join(f"{k}: {v}" for k, v in counts.items()) or "N/A"
+
+    ai_report_excerpt = ""
+    if payload.ai_report:
+        excerpt = payload.ai_report[:1200]
+        if len(payload.ai_report) > 1200:
+            excerpt += "..."
+        ai_report_excerpt = f"\n\nPrior AI Report Excerpt:\n{excerpt}"
+
+    return (
+        f"[INVESTIGATION CONTEXT — do not repeat this block verbatim in your reply]\n"
+        f"Investigation ID: {payload.investigation_id or 'N/A'}\n"
+        f"Cluster: {payload.cluster_name} | Status: {payload.status}\n"
+        f"Namespace(s): {payload.namespace or 'N/A'}\n"
+        f"Summary: {payload.summary or 'N/A'}\n"
+        f"Issue counts: {severity_text}\n\n"
+        f"Findings:\n{findings_text}\n\n"
+        f"Recommended diagnostic commands:\n{commands_text}"
+        f"{ai_report_excerpt}"
+    )
+
+
+_HEALTHY_INSTRUCTION = """
+ADDITIONAL CONTEXT: The current cluster is healthy and no active issues are detected.
+- Focus your answers on monitoring, cluster optimization, Kubernetes best practices, resource management, learning, and prevention of future incidents.
+- Do not assume there are active failures or provide troubleshooting steps for non-existent issues.
+"""
+
+
+def _build_ollama_messages(payload: AIChatRequest) -> list[dict]:
+    """
+    Build the full Ollama messages list:
+    [system] + [context injected into first user turn] + [history turns] + [current user message]
+    """
+    is_healthy = payload.status == "Healthy" or not payload.findings
+
+    system_prompt = _CHAT_SYSTEM_PROMPT
+    if is_healthy:
+        system_prompt += "\n" + _HEALTHY_INSTRUCTION
+
+    messages = [{"role": "system", "content": system_prompt}]
+
+    context_block = _build_context_block(payload)
+
+    if payload.history:
+        # Prepend context to the very first user message in history
+        first = payload.history[0]
+        first_content = f"{context_block}\n\n---\n\n{first.content}"
+        messages.append({"role": first.role, "content": first_content})
+        for turn in payload.history[1:]:
+            messages.append({"role": turn.role, "content": turn.content})
+        # Current user message (no context re-injection)
+        messages.append({"role": "user", "content": payload.message})
+    else:
+        # First ever message — inject context into this turn
+        messages.append({
+            "role": "user",
+            "content": f"{context_block}\n\n---\n\n{payload.message}",
+        })
+
+    return messages
+
+
+@router.post(
+    "/chat",
+    response_model=AIChatResponse,
+    summary="Conversational context-aware Q&A for an investigation",
+    status_code=status.HTTP_200_OK,
+)
+def chat_with_investigation(payload: AIChatRequest) -> AIChatResponse:
+    """
+    Accept a user message with investigation context and conversation history.
+    Builds a multi-turn Ollama prompt for natural, conversational responses.
+    """
+    logger.info(
+        "POST /api/ai/chat | inv=%s cluster=%s history_turns=%d",
+        payload.investigation_id,
+        payload.cluster_name,
+        len(payload.history),
+    )
+
+    ollama_messages = _build_ollama_messages(payload)
+
+    try:
+        response = ollama.chat(
+            model=ai_service.model,
+            messages=ollama_messages,
+        )
+    except ollama.ResponseError as exc:
+        logger.error("Ollama ResponseError in /chat: %s", exc)
+        raise HTTPException(
+            status_code=status.HTTP_503_SERVICE_UNAVAILABLE,
+            detail=f"AI model returned an error: {exc}",
+        ) from exc
+    except Exception as exc:
+        logger.error("Unexpected error in /chat: %s", exc)
+        raise HTTPException(
+            status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
+            detail=f"Failed to reach AI model. Ensure Ollama is running. Detail: {exc}",
+        ) from exc
+
+    reply: str = response.message.content or ""
+    prompt_tokens: int | None = getattr(response, "prompt_eval_count", None)
+    completion_tokens: int | None = getattr(response, "eval_count", None)
+
+    logger.info(
+        "Chat reply generated | inv=%s tokens=%s/%s",
+        payload.investigation_id, prompt_tokens, completion_tokens,
+    )
+
+    return AIChatResponse(
+        reply=reply,
+        model=ai_service.model,
+        prompt_tokens=prompt_tokens,
+        completion_tokens=completion_tokens,
     )
 
 

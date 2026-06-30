@@ -16,6 +16,7 @@ const Investigations = lazy(() => import("./pages/Investigations"));
 const Investigation = lazy(() => import("./pages/Investigation"));
 const AIReport = lazy(() => import("./pages/AIReport"));
 const Settings = lazy(() => import("./pages/Settings"));
+const InvestigationChat = lazy(() => import("./pages/InvestigationChat"));
 
 
 function PageLoader() {
@@ -131,6 +132,14 @@ function App() {
               element={
                 <Suspense fallback={<PageLoader />}>
                   <AIReport />
+                </Suspense>
+              }
+            />
+            <Route
+              path="/investigations/:id/chat"
+              element={
+                <Suspense fallback={<PageLoader />}>
+                  <InvestigationChat />
                 </Suspense>
               }
             />

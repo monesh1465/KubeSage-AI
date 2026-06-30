@@ -11,6 +11,7 @@ import {
   FiAlertCircle,
   FiCopy,
   FiCheck,
+  FiMessageSquare,
 } from "react-icons/fi";
 import PageSkeleton from "../components/PageSkeleton";
 import StatusBadge from "../components/StatusBadge";
@@ -382,6 +383,125 @@ function Investigation() {
         </div>
       </div>
 
+      {/* AI Analysis Status Card — placed here so it's always visible above findings */}
+      {hasAIReport ? (
+        <div className="rounded-xl border border-[var(--color-primary)]/30 bg-[var(--color-primary)]/4 p-5 shadow-sm">
+          <div className="flex flex-wrap items-start justify-between gap-4">
+            <div className="space-y-3">
+              <p className="text-[10px] font-bold uppercase tracking-widest text-[var(--color-secondary)]">
+                AI Analysis Available
+              </p>
+              <div className="grid grid-cols-2 sm:grid-cols-3 gap-6 text-xs">
+                <div>
+                  <p className="text-[10px] text-[var(--color-secondary)] uppercase tracking-wider font-semibold">Generated At</p>
+                  <p className="text-xs font-bold text-[var(--color-text)] mt-1.5">
+                    {formatDateTime(aiAnalysis?.generated_at || aiAnalysis?.created_at)}
+                  </p>
+                </div>
+                <div>
+                  <p className="text-[10px] text-[var(--color-secondary)] uppercase tracking-wider font-semibold">Model</p>
+                  <p className="text-xs font-mono font-bold text-[var(--color-text)] mt-1.5">
+                    {aiAnalysis?.model || "gemma4:31b-cloud"}
+                  </p>
+                </div>
+                <div>
+                  <p className="text-[10px] text-[var(--color-secondary)] uppercase tracking-wider font-semibold">Tokens</p>
+                  <p className="text-xs font-bold text-[var(--color-text)] mt-1.5">
+                    {aiAnalysis ? (aiAnalysis.prompt_tokens ?? 0) + (aiAnalysis.completion_tokens ?? 0) : "—"}
+                  </p>
+                </div>
+              </div>
+            </div>
+            <div className="flex items-center gap-2">
+              <button
+                type="button"
+                onClick={(e) => {
+                  e.preventDefault();
+                  e.stopPropagation();
+                  copyReport(aiAnalysis?.analysis);
+                  toast.success("AI report copied successfully.");
+                }}
+                className="inline-flex items-center gap-1.5 rounded-lg border border-[var(--color-border)] px-3 py-1.5 text-xs font-semibold text-[var(--color-secondary)] transition-colors hover:text-[var(--color-text)] hover:bg-[var(--color-bg)]"
+              >
+                <FiCopy className="h-3.5 w-3.5" />
+                Copy Report
+              </button>
+              <button
+                type="button"
+                onClick={(e) => {
+                  e.preventDefault();
+                  e.stopPropagation();
+                  handleExportPDF();
+                }}
+                disabled={pdfLoading}
+                className="inline-flex items-center gap-1.5 rounded-lg border border-[var(--color-border)] px-3 py-1.5 text-xs font-semibold text-[var(--color-secondary)] transition-colors hover:text-[var(--color-text)] hover:bg-[var(--color-bg)] disabled:opacity-60"
+              >
+                {pdfLoading ? (
+                  <FiRefreshCw className="h-3.5 w-3.5 animate-spin" />
+                ) : (
+                  <FiFileText className="h-3.5 w-3.5" />
+                )}
+                {pdfLoading ? "Generating..." : "Export PDF"}
+              </button>
+              <Link
+                to={`/investigations/${result.id}/ai`}
+                className="inline-flex items-center gap-1.5 rounded-lg bg-[var(--color-primary)] px-3.5 py-1.5 text-xs font-bold text-white transition-opacity hover:opacity-90"
+              >
+                <FiFileText className="h-3.5 w-3.5" />
+                View AI Report
+              </Link>
+              <Link
+                to={`/investigations/${result.id}/chat`}
+                className="inline-flex items-center gap-1.5 rounded-lg bg-[var(--color-primary)] px-3.5 py-1.5 text-xs font-bold text-white transition-opacity hover:opacity-90"
+              >
+                <FiMessageSquare className="h-3.5 w-3.5" />
+                Chat with AI
+              </Link>
+            </div>
+          </div>
+        </div>
+      ) : (
+        <div className="rounded-xl border border-dashed border-[var(--color-border)] bg-[var(--color-card)] p-5 shadow-sm">
+          <div className="flex items-center justify-between gap-4">
+            <div>
+              <p className="text-[10px] font-bold uppercase tracking-widest text-[var(--color-secondary)]">
+                AI Analysis Status
+              </p>
+              <p className="mt-1.5 text-xs text-[var(--color-secondary)]">
+                No AI report has been generated for this investigation run.
+              </p>
+            </div>
+            <div className="flex items-center gap-2">
+              <Link
+                to={`/investigations/${result.id}/chat`}
+                className="inline-flex items-center gap-1.5 rounded-lg border border-[var(--color-primary)]/40 bg-[var(--color-primary)]/8 px-3 py-1.5 text-xs font-bold text-[var(--color-primary)] transition-all hover:bg-[var(--color-primary)]/14 hover:border-[var(--color-primary)]/60"
+              >
+                <FiMessageSquare className="h-3.5 w-3.5" />
+                Chat with AI
+              </Link>
+              <button
+                type="button"
+                onClick={handleGenerateAI}
+                disabled={generatingAI}
+                className="inline-flex items-center gap-1.5 rounded-lg bg-[var(--color-primary)] px-3.5 py-1.5 text-xs font-bold text-white transition-opacity hover:opacity-90 disabled:opacity-60"
+              >
+                {generatingAI ? (
+                  <>
+                    <FiRefreshCw className="h-3.5 w-3.5 animate-spin" />
+                    Generating...
+                  </>
+                ) : (
+                  <>
+                    <FiZap className="h-3.5 w-3.5" />
+                    Generate AI Analysis
+                  </>
+                )}
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
+
       {/* Findings */}
       {issues.length > 0 && (
         <div className="rounded-xl border border-[var(--color-border)] bg-[var(--color-card)] shadow-sm overflow-hidden">
@@ -451,108 +571,7 @@ function Investigation() {
         </div>
       )}
 
-      {/* AI Analysis Status Card */}
-      {hasAIReport ? (
-        <div className="rounded-xl border border-[var(--color-primary)]/30 bg-[var(--color-primary)]/4 p-5 shadow-sm">
-          <div className="flex flex-wrap items-start justify-between gap-4">
-            <div className="space-y-3">
-              <p className="text-[10px] font-bold uppercase tracking-widest text-[var(--color-secondary)]">
-                AI Analysis Available
-              </p>
-              <div className="grid grid-cols-2 sm:grid-cols-3 gap-6 text-xs">
-                <div>
-                  <p className="text-[10px] text-[var(--color-secondary)] uppercase tracking-wider font-semibold">Generated At</p>
-                  <p className="text-xs font-bold text-[var(--color-text)] mt-1.5">
-                    {formatDateTime(aiAnalysis?.generated_at || aiAnalysis?.created_at)}
-                  </p>
-                </div>
-                <div>
-                  <p className="text-[10px] text-[var(--color-secondary)] uppercase tracking-wider font-semibold">Model</p>
-                  <p className="text-xs font-mono font-bold text-[var(--color-text)] mt-1.5">
-                    {aiAnalysis?.model || "gemma4:31b-cloud"}
-                  </p>
-                </div>
-                <div>
-                  <p className="text-[10px] text-[var(--color-secondary)] uppercase tracking-wider font-semibold">Tokens</p>
-                  <p className="text-xs font-bold text-[var(--color-text)] mt-1.5">
-                    {aiAnalysis ? (aiAnalysis.prompt_tokens ?? 0) + (aiAnalysis.completion_tokens ?? 0) : "—"}
-                  </p>
-                </div>
-              </div>
-            </div>
-            <div className="flex items-center gap-2">
-              <button
-                type="button"
-                onClick={(e) => {
-                  e.preventDefault();
-                  e.stopPropagation();
-                  copyReport(aiAnalysis?.analysis);
-                  toast.success("AI report copied successfully.");
-                }}
-                className="inline-flex items-center gap-1.5 rounded-lg border border-[var(--color-border)] px-3 py-1.5 text-xs font-semibold text-[var(--color-secondary)] transition-colors hover:text-[var(--color-text)] hover:bg-[var(--color-bg)]"
-              >
-                <FiCopy className="h-3.5 w-3.5" />
-                Copy Report
-              </button>
-              <button
-                type="button"
-                onClick={(e) => {
-                  e.preventDefault();
-                  e.stopPropagation();
-                  handleExportPDF();
-                }}
-                disabled={pdfLoading}
-                className="inline-flex items-center gap-1.5 rounded-lg border border-[var(--color-border)] px-3 py-1.5 text-xs font-semibold text-[var(--color-secondary)] transition-colors hover:text-[var(--color-text)] hover:bg-[var(--color-bg)] disabled:opacity-60"
-              >
-                {pdfLoading ? (
-                  <FiRefreshCw className="h-3.5 w-3.5 animate-spin" />
-                ) : (
-                  <FiFileText className="h-3.5 w-3.5" />
-                )}
-                {pdfLoading ? "Generating..." : "Export PDF"}
-              </button>
-              <Link
-                to={`/investigations/${result.id}/ai`}
-                className="inline-flex items-center gap-1.5 rounded-lg bg-[var(--color-primary)] px-3.5 py-1.5 text-xs font-bold text-white transition-opacity hover:opacity-90"
-              >
-                <FiFileText className="h-3.5 w-3.5" />
-                View AI Report
-              </Link>
-            </div>
-          </div>
-        </div>
-      ) : (
-        <div className="rounded-xl border border-dashed border-[var(--color-border)] bg-[var(--color-card)] p-5 shadow-sm">
-          <div className="flex items-center justify-between gap-4">
-            <div>
-              <p className="text-[10px] font-bold uppercase tracking-widest text-[var(--color-secondary)]">
-                AI Analysis Status
-              </p>
-              <p className="mt-1.5 text-xs text-[var(--color-secondary)]">
-                No AI report has been generated for this investigation run.
-              </p>
-            </div>
-            <button
-              type="button"
-              onClick={handleGenerateAI}
-              disabled={generatingAI}
-              className="inline-flex items-center gap-1.5 rounded-lg bg-[var(--color-primary)] px-3.5 py-1.5 text-xs font-bold text-white transition-opacity hover:opacity-90 disabled:opacity-60"
-            >
-              {generatingAI ? (
-                <>
-                  <FiRefreshCw className="h-3.5 w-3.5 animate-spin" />
-                  Generating...
-                </>
-              ) : (
-                <>
-                  <FiZap className="h-3.5 w-3.5" />
-                  Generate AI Analysis
-                </>
-              )}
-            </button>
-          </div>
-        </div>
-      )}
+
 
       {/* Timeline Card */}
       <div className="rounded-xl border border-[var(--color-border)] bg-[var(--color-card)] p-5 shadow-sm space-y-4">
